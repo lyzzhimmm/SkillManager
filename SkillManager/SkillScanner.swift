@@ -38,7 +38,11 @@ struct SkillScanner {
             result.append(skill)
         }
 
-        return result
+        // Sort: frequency high→medium→low, then alphabetically
+        return result.sorted { a, b in
+            if a.frequency != b.frequency { return a.frequency < b.frequency }
+            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
     }
 
     // MARK: - Parse Generated Inventory
