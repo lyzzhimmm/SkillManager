@@ -92,10 +92,11 @@ class SkillStore: ObservableObject {
         isSyncing = true
         DispatchQueue.global(qos: .userInitiated).async {
             let copied = SkillSyncer.collectToVault(skills: self.skills)
+            // Re-load skills from updated inventory
             DispatchQueue.main.async {
+                self.load()
                 self.isSyncing = false
-                self.refreshSyncStatus()
-                self.lastError = copied > 0 ? "已收集 \(copied) 个通用 Skill" : "没有新 Skill 需要收集"
+                self.lastError = copied > 0 ? "已收集 \(copied) 个 Skill" : "没有新 Skill 需要收集"
             }
         }
     }

@@ -6,6 +6,9 @@ struct SkillScanner {
         // 1. Parse cross-platform inventory for metadata
         let crossPlatform = InventoryParser.parse(at: inventoryPath)
 
+        // 1.5. Parse supplement for frequency/description
+        let supplement = SkillSyncer.parseSupplement()
+
         // 3. Scan local directories
         var localSkills: [String: (dirs: [URL], agents: Set<Agent>)] = [:]
 
@@ -26,7 +29,7 @@ struct SkillScanner {
         var skillMap: [String: Skill] = [:]
 
         for (name, info) in localSkills {
-            if let skill = parseLocalSkill(name: name, dirs: info.dirs, agents: info.agents, crossPlatform: crossPlatform) {
+            if let skill = parseLocalSkill(name: name, dirs: info.dirs, agents: info.agents, crossPlatform: crossPlatform, supplement: supplement) {
                 // Use parsedName as key to avoid duplicates
                 let key = skill.name
                 if let existing = skillMap[key] {
@@ -64,7 +67,8 @@ struct SkillScanner {
         name: String,
         dirs: [URL],
         agents: Set<Agent>,
-        crossPlatform: [String: InventoryParser.SkillMeta]
+        crossPlatform: [String: InventoryParser.SkillMeta],
+        supplement: [String: SkillSyncer.SupplementEntry] = [:]
     ) -> Skill? {
         let skillMd = dirs[0].appendingPathComponent("SKILL.md")
         guard let content = try? String(contentsOf: skillMd, encoding: .utf8) else { return nil }
@@ -128,9 +132,10 @@ struct SkillScanner {
         )
 
         let meta = crossPlatform[parsedName] ?? crossPlatform[name]
+        let sup = supplement[parsedName] ?? supplement[name]
 
         let category = Category.classify(name: parsedName, description: parsedDesc)
-        let frequency = meta?.frequency ?? .low
+        let frequency = sup?.frequency ?? meta?.frequency ?? .low
         let source = meta?.source ?? ""
         let isUniversal = meta?.isUniversal ?? false
         let migration = meta?.migration ?? .portable
@@ -139,7 +144,7 @@ struct SkillScanner {
         // If skill is installed in an agent, it's compatible with that agent
         compatibleWith.formUnion(agents)
 
-        let inventoryDesc = meta?.description.trimmingCharacters(in: .whitespaces) ?? ""
+        let inventoryDesc = sup?.description ?? meta?.description.trimmingCharacters(in: .whitespaces) ?? ""
         let finalDesc = inventoryDesc.isEmpty ? parsedDesc : inventoryDesc
 
         return Skill(
