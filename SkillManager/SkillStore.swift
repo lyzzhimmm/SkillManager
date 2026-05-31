@@ -68,6 +68,26 @@ class SkillStore: ObservableObject {
         }
     }
 
+    func collectAndPush() {
+        isSyncing = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let copied = SkillSyncer.collectToVault(skills: self.skills)
+            do {
+                _ = try SkillSyncer.push(message: "sync: 收集 \(copied) 个通用 Skill")
+                DispatchQueue.main.async {
+                    self.isSyncing = false
+                    self.refreshSyncStatus()
+                    self.lastError = copied > 0 ? nil : "没有新 Skill 需要推送"
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.lastError = error.localizedDescription
+                    self.isSyncing = false
+                }
+            }
+        }
+    }
+
     func installFromVault(skillName: String, to agent: Agent) {
         do {
             try SkillSyncer.installFromVault(skillName: skillName, to: agent)

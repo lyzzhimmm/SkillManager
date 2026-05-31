@@ -25,7 +25,8 @@ struct ContentView: View {
                 syncStatus: store.syncStatus,
                 isSyncing: store.isSyncing,
                 onSyncPull: { store.syncPull() },
-                onSyncPush: { store.syncPush() }
+                onSyncPush: { store.syncPush() },
+                onCollectPush: { store.collectAndPush() }
             )
 
             mainContent

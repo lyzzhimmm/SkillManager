@@ -136,6 +136,44 @@ struct SkillSyncer {
         }.sorted()
     }
 
+    // MARK: - Collect Local Universal Skills → Vault
+
+    static func collectToVault(skills: [Skill]) -> Int {
+        let vaultSkillsDir = (localRepoPath as NSString).appendingPathComponent("skills")
+
+        // Ensure vault exists
+        if !FileManager.default.fileExists(atPath: localRepoPath) {
+            _ = try? clone()
+        }
+        if !FileManager.default.fileExists(atPath: vaultSkillsDir) {
+            try? FileManager.default.createDirectory(atPath: vaultSkillsDir, withIntermediateDirectories: true)
+        }
+
+        var copied = 0
+        for skill in skills {
+            // Only collect universal/portable skills that are local
+            guard skill.isUniversal || skill.migration.canDirectDeploy else { continue }
+            guard skill.isLocal else { continue }
+
+            let sourceDir = skill.filePath.deletingLastPathComponent()
+            let targetDir = URL(fileURLWithPath: vaultSkillsDir).appendingPathComponent(skill.name)
+
+            // Remove old version if exists
+            if FileManager.default.fileExists(atPath: targetDir.path) {
+                try? FileManager.default.removeItem(at: targetDir)
+            }
+
+            do {
+                try FileManager.default.copyItem(at: sourceDir, to: targetDir)
+                copied += 1
+            } catch {
+                // Skip failed copies silently
+            }
+        }
+
+        return copied
+    }
+
     // MARK: - Install from Vault to Agent
 
     static func installFromVault(skillName: String, to agent: Agent) throws {
