@@ -78,7 +78,11 @@ struct SkillScanner {
             if trimmed.contains("---") { continue }
             if trimmed.contains("Skill") && trimmed.contains("来源") { continue } // header row
             if trimmed.contains("Skill") && trimmed.contains("频次") { continue } // header row
-            if trimmed.contains("分类") && trimmed.contains("数量") { continue } // summary table
+            if trimmed.contains("分类") && trimmed.contains("数量") { continue } // summary table header
+            // Skip summary table data rows
+            if trimmed.contains("通用") && trimmed.contains("|") && !trimmed.contains("`") { continue }
+            if trimmed.contains("专属") && trimmed.contains("|") && !trimmed.contains("`") { continue }
+            if trimmed.contains("合计") { continue }
 
             let cells = trimmed.components(separatedBy: "|")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
