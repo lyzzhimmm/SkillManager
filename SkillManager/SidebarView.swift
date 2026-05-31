@@ -246,7 +246,7 @@ struct SidebarView: View {
     }
 
     private func installedAgentChip(_ agent: Agent) -> some View {
-        let isOn = filter.selectedInstalledAgents.contains(agent)
+        let isOn = filter.selectedInstalledAgent == agent
         let color = agent.color
         return Text(agent.displayName.components(separatedBy: " ").first ?? agent.displayName)
             .font(.system(size: 11))
@@ -260,8 +260,8 @@ struct SidebarView: View {
             )
             .cornerRadius(12)
             .onTapGesture {
-                if isOn { filter.selectedInstalledAgents.remove(agent) }
-                else { filter.selectedInstalledAgents.insert(agent) }
+                if isOn { filter.selectedInstalledAgent = nil }
+                else { filter.selectedInstalledAgent = agent }
             }
     }
 
