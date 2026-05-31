@@ -10,7 +10,8 @@ struct SidebarView: View {
     var isSyncing: Bool = false
     var onSyncPull: (() -> Void)?
     var onSyncPush: (() -> Void)?
-    var onCollectPush: (() -> Void)?
+    var onCollect: (() -> Void)?
+    var onPush: (() -> Void)?
 
     // Sidebar is always dark-themed
     private let bg = Color(hex: 0x1A1A1E)
@@ -121,9 +122,14 @@ struct SidebarView: View {
                                 .sidebarButton()
                                 .disabled(isSyncing)
                         }
-                        Button("↑ 收集通用 Skill 并推送") { onCollectPush?() }
-                            .sidebarButton()
-                            .disabled(isSyncing)
+                        HStack(spacing: 6) {
+                            Button("↓ 收集") { onCollect?() }
+                                .sidebarButton()
+                                .disabled(isSyncing)
+                            Button("↑ 推送") { onPush?() }
+                                .sidebarButton()
+                                .disabled(isSyncing)
+                        }
                     }
                 }
             }

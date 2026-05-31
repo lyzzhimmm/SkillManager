@@ -33,7 +33,8 @@ struct ContentView: View {
                 isSyncing: store.isSyncing,
                 onSyncPull: { store.syncPull() },
                 onSyncPush: { store.syncPush() },
-                onCollectPush: { store.collectAndPush() }
+                onCollect: { store.collect() },
+                onPush: { store.pushOnly() }
             )
 
             mainContent
