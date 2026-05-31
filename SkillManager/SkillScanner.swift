@@ -153,7 +153,7 @@ struct SkillScanner {
 
         // Metadata from supplement only (not from inventory for classification)
         let sup = supplement[parsedName] ?? supplement[name]
-        let category = Category.classify(name: parsedName, description: parsedDesc, tags: parsedTags)
+        let category = Category.classify(name: parsedName, description: parsedDesc, tags: parsedTags, supplementCategory: sup?.category ?? "")
         let frequency = sup?.frequency ?? .low
         let source = sup?.source ?? ""
         let description = sup?.description ?? parsedDesc

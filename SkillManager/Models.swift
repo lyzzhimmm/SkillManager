@@ -100,7 +100,18 @@ enum Category: String, CaseIterable, Hashable {
     case arch      = "架构"
     case other     = "其他"
 
-    static func classify(name: String, description: String, tags: [String] = []) -> Category {
+    static func classify(name: String, description: String, tags: [String] = [], supplementCategory: String = "") -> Category {
+        // First priority: supplement category
+        if !supplementCategory.isEmpty {
+            if supplementCategory.contains("规划") || supplementCategory.contains("设计") { return .planning }
+            if supplementCategory.contains("开发") || supplementCategory.contains("构建") { return .dev }
+            if supplementCategory.contains("质量") || supplementCategory.contains("审查") { return .quality }
+            if supplementCategory.contains("调试") || supplementCategory.contains("测试") { return .debug }
+            if supplementCategory.contains("项目") || supplementCategory.contains("管理") { return .project }
+            if supplementCategory.contains("网页") || supplementCategory.contains("搜索") { return .web }
+            if supplementCategory.contains("内容") || supplementCategory.contains("文档") { return .content }
+            if supplementCategory.contains("架构") || supplementCategory.contains("模式") { return .arch }
+        }
         // First try tags
         let tagText = tags.joined(separator: " ").lowercased()
         if tagText.contains("plan") || tagText.contains("design") || tagText.contains("brainstorm") ||
