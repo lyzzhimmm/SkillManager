@@ -92,7 +92,7 @@ class SkillStore: ObservableObject {
         isSyncing = true
         DispatchQueue.global(qos: .userInitiated).async {
             let copied = SkillSyncer.collectToVault(skills: self.skills)
-            // Re-load skills from updated inventory
+            // Generate inventory first, then re-load to apply supplement data
             DispatchQueue.main.async {
                 self.load()
                 self.isSyncing = false
