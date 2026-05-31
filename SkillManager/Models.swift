@@ -202,7 +202,7 @@ struct FilterState {
         if !selectedFrequencies.contains(skill.frequency) {
             return false
         }
-        if !selectedAgents.isEmpty && skill.deployedIn.isDisjoint(with: selectedAgents) {
+        if !selectedAgents.isEmpty && !skill.deployedIn.isEmpty && skill.deployedIn.isDisjoint(with: selectedAgents) {
             return false
         }
         if !searchText.isEmpty {
