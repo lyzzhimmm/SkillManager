@@ -118,11 +118,6 @@ struct SidebarView: View {
                             Button(isSyncing ? "同步中..." : "拉取") { onSyncPull?() }
                                 .sidebarButton()
                                 .disabled(isSyncing)
-                            Button("推送") { onSyncPush?() }
-                                .sidebarButton()
-                                .disabled(isSyncing)
-                        }
-                        HStack(spacing: 6) {
                             Button("↓ 收集") { onCollect?() }
                                 .sidebarButton()
                                 .disabled(isSyncing)
