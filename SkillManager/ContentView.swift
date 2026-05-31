@@ -27,12 +27,10 @@ struct ContentView: View {
                 filter: $filter,
                 skillCounts: store.categoryCounts,
                 totalCount: store.skills.count,
-                inventoryPath: $inventoryPath,
                 onReload: { store.load(inventoryPath: inventoryPath) },
                 syncStatus: store.syncStatus,
                 isSyncing: store.isSyncing,
                 onSyncPull: { store.syncPull() },
-                onSyncPush: { store.syncPush() },
                 onCollect: { store.collect() },
                 onPush: { store.pushOnly() }
             )

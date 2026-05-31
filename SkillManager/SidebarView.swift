@@ -4,12 +4,10 @@ struct SidebarView: View {
     @Binding var filter: FilterState
     let skillCounts: [Category: Int]
     let totalCount: Int
-    @Binding var inventoryPath: String
     let onReload: () -> Void
     var syncStatus: SkillSyncer.SyncStatus?
     var isSyncing: Bool = false
     var onSyncPull: (() -> Void)?
-    var onSyncPush: (() -> Void)?
     var onCollect: (() -> Void)?
     var onPush: (() -> Void)?
 
@@ -121,50 +119,6 @@ struct SidebarView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
 
-            divider
-
-            // Inventory file
-            sectionTitle("清单文件")
-            VStack(alignment: .leading, spacing: 4) {
-                Text(URL(fileURLWithPath: inventoryPath).lastPathComponent)
-                    .font(.system(size: 11))
-                    .foregroundColor(textDim)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                HStack(spacing: 6) {
-                    Button("选择文件") {
-                        let panel = NSOpenPanel()
-                        panel.allowedContentTypes = [.plainText]
-                        panel.allowsMultipleSelection = false
-                        panel.canChooseDirectories = false
-                        panel.message = "选择 Skill 清单 MD 文件"
-                        if panel.runModal() == .OK, let url = panel.url {
-                            inventoryPath = url.path
-                            UserDefaults.standard.set(url.path, forKey: "inventoryPath")
-                            onReload()
-                        }
-                    }
-                    .font(.system(size: 10.5))
-                    .buttonStyle(.plain)
-                    .foregroundColor(Color(hex: 0xE0E0E0))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.white.opacity(0.08))
-                    .cornerRadius(4)
-
-                    Button("刷新") { onReload() }
-                        .font(.system(size: 10.5))
-                        .buttonStyle(.plain)
-                        .foregroundColor(Color(hex: 0xE0E0E0))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.white.opacity(0.08))
-                        .cornerRadius(4)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
         }
         .frame(width: 220)
         .background(bg)
