@@ -8,6 +8,7 @@ struct SidebarView: View {
     var vaultStatus: SkillSyncer.VaultStatus?
     var isProcessing: Bool = false
     var onPull: (() -> Void)?
+    var onCleanPull: (() -> Void)?
     var onPush: (() -> Void)?
     var onCollect: (() -> Void)?
     var onGenerate: (() -> Void)?
@@ -106,6 +107,9 @@ struct SidebarView: View {
 
                         HStack(spacing: 4) {
                             Button(isProcessing ? "..." : "拉取") { onPull?() }
+                                .sidebarButton()
+                                .disabled(isProcessing)
+                            Button(isProcessing ? "..." : "🔄 清空拉取") { onCleanPull?() }
                                 .sidebarButton()
                                 .disabled(isProcessing)
                             Button("推送") { onPush?() }

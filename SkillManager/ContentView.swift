@@ -31,6 +31,7 @@ struct ContentView: View {
                 vaultStatus: store.vaultStatus,
                 isProcessing: store.isProcessing,
                 onPull: { store.pull() },
+                onCleanPull: { store.cleanPull() },
                 onPush: { store.push() },
                 onCollect: { store.collect() },
                 onGenerate: { store.generate() },

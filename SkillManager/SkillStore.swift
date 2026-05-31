@@ -106,6 +106,33 @@ class SkillStore: ObservableObject {
         }
     }
 
+    // MARK: - Clean Pull (delete vault + re-clone)
+
+    func cleanPull() {
+        isProcessing = true
+        lastError = "清空并重新拉取..."
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Delete vault directory
+            let vaultPath = SkillSyncer.localRepoPath
+            try? FileManager.default.removeItem(atPath: vaultPath)
+
+            // Re-clone
+            do {
+                _ = try SkillSyncer.clone()
+                DispatchQueue.main.async {
+                    self.isProcessing = false
+                    self.load()
+                    self.lastError = "清空并拉取完成"
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.isProcessing = false
+                    self.lastError = error.localizedDescription
+                }
+            }
+        }
+    }
+
     // MARK: - Push
 
     func push() {
