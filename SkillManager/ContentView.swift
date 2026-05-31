@@ -79,6 +79,7 @@ struct ContentView: View {
 
             StatusView(
                 totalCount: store.skills.count,
+                universalCount: store.skills.filter { $0.isUniversal }.count,
                 claudeCount: store.countForAgent(.claude),
                 codexCount: store.countForAgent(.codex),
                 hermesCount: store.countForAgent(.hermes),
