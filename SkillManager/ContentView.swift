@@ -130,8 +130,7 @@ struct ContentView: View {
                     ForEach(Agent.allCases) { agent in
                         AgentBadge(
                             agent: agent,
-                            isDeployed: skill.deployedIn.contains(agent),
-                            onTap: { handleAgentToggle(skill: skill, agent: agent) }
+                            isDeployed: skill.deployedIn.contains(agent)
                         )
                     }
                 }

@@ -1,11 +1,10 @@
 import SwiftUI
 
-// MARK: - Agent Badge
+// MARK: - Agent Badge (只读展示)
 
 struct AgentBadge: View {
     let agent: Agent
     let isDeployed: Bool
-    let onTap: () -> Void
 
     var body: some View {
         Circle()
@@ -20,8 +19,7 @@ struct AgentBadge: View {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(isDeployed ? .white : agent.color.opacity(0.6))
             )
-            .onTapGesture { onTap() }
-            .help(agent.displayName)
+            .help(isDeployed ? "\(agent.displayName) 已安装" : "\(agent.displayName) 未安装")
     }
 }
 
