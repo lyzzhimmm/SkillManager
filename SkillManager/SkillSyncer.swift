@@ -173,13 +173,15 @@ struct SkillSyncer {
             }
         }
 
-        // Clean up vault entries that no longer exist locally
-        if let existing = try? FileManager.default.contentsOfDirectory(atPath: vaultSkillsDir) {
-            for name in existing {
-                if !allNames.contains(name) {
-                    try? FileManager.default.removeItem(
-                        atPath: (vaultSkillsDir as NSString).appendingPathComponent(name)
-                    )
+        // Clean up vault entries that no longer exist locally (only if we collected something)
+        if !allNames.isEmpty {
+            if let existing = try? FileManager.default.contentsOfDirectory(atPath: vaultSkillsDir) {
+                for name in existing {
+                    if !allNames.contains(name) {
+                        try? FileManager.default.removeItem(
+                            atPath: (vaultSkillsDir as NSString).appendingPathComponent(name)
+                        )
+                    }
                 }
             }
         }
@@ -240,27 +242,24 @@ struct SkillSyncer {
 
         let outputPath = (inventoryDir as NSString).appendingPathComponent("Agent Skill 跨平台对比清单.md")
 
-        // Classify skills by universal flag and exclusive status
+        // Classify skills by deployment status (NOT by isUniversal flag)
+        // Three agents have it = universal; fewer = exclusive
         var universal: [Skill] = []
         var claudeOnly: [Skill] = []
         var codexOnly: [Skill] = []
         var hermesOnly: [Skill] = []
 
         for skill in skills {
-            if skill.isUniversal {
+            let agentCount = skill.deployedIn.count
+            if agentCount >= 3 || skill.deployedIn == Set(Agent.allCases) {
                 universal.append(skill)
-            } else if case .exclusive(let agent) = skill.migration {
-                switch agent {
-                case .claude: claudeOnly.append(skill)
-                case .codex: codexOnly.append(skill)
-                case .hermes: hermesOnly.append(skill)
-                default: universal.append(skill)
-                }
-            } else {
-                // Not universal, not exclusive — classify by where it's installed
+            } else if agentCount == 1 {
                 if skill.deployedIn.contains(.claude) { claudeOnly.append(skill) }
                 if skill.deployedIn.contains(.codex) { codexOnly.append(skill) }
                 if skill.deployedIn.contains(.hermes) { hermesOnly.append(skill) }
+            } else {
+                // In 2 agents — still somewhat universal, put in universal
+                universal.append(skill)
             }
         }
 
