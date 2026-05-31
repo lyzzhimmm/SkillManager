@@ -190,7 +190,7 @@ struct SkillSyncer {
         return copied
     }
 
-    // MARK: - Auto-generate Inventory from Scan Results
+    // MARK: - Auto-generate Complete Inventory from Scan Results
 
     static func generateInventory(skills: [Skill]) {
         let inventoryDir = (localRepoPath as NSString).appendingPathComponent("inventory")
@@ -198,13 +198,26 @@ struct SkillSyncer {
             try? FileManager.default.createDirectory(atPath: inventoryDir, withIntermediateDirectories: true)
         }
 
-        let outputPath = (inventoryDir as NSString).appendingPathComponent("Agent Skill 通用清单.md")
+        let outputPath = (inventoryDir as NSString).appendingPathComponent("Agent Skill 跨平台对比清单.md")
 
-        // Group skills by category
-        var byCategory: [Category: [Skill]] = [:]
+        // Classify skills by migration status
+        var universal: [Skill] = []
+        var claudeOnly: [Skill] = []
+        var codexOnly: [Skill] = []
+        var hermesOnly: [Skill] = []
+
         for skill in skills {
-            guard skill.isUniversal else { continue }
-            byCategory[skill.category, default: []].append(skill)
+            switch skill.migration {
+            case .exclusive(let agent):
+                switch agent {
+                case .claude: claudeOnly.append(skill)
+                case .codex: codexOnly.append(skill)
+                case .hermes: hermesOnly.append(skill)
+                default: universal.append(skill)
+                }
+            case .portable, .needsAdaptation:
+                universal.append(skill)
+            }
         }
 
         // Category display names
@@ -219,29 +232,83 @@ struct SkillSyncer {
             .arch: "架构 & 模式",
             .other: "其他",
         ]
+        let categoryOrder: [Category] = [.planning, .quality, .debug, .project, .web, .content, .arch, .dev, .other]
 
-        var md = "# Agent Skill 通用清单\n\n"
-        md += "> 自动生成 — 从三个 Agent 目录扫描，三个都有 = 通用\n\n"
-        md += "---\n\n"
+        var md = "# Agent Skill 跨平台对比清单\n\n"
+        md += "> 自动生成 — 从三个 Agent 目录扫描，按适配性分类\n\n"
 
-        let order: [Category] = [.planning, .quality, .debug, .project, .web, .content, .arch, .other]
-        for cat in order {
-            guard let catSkills = byCategory[cat], !catSkills.isEmpty else { continue }
-            let name = categoryNames[cat] ?? cat.rawValue
-            md += "## \(name)\n\n"
-            md += "| Skill | 来源 | 频次 | 适配 | 用途 |\n"
-            md += "|---|---|:---:|---|---|\n"
-            for skill in catSkills.sorted(by: { $0.name < $1.name }) {
-                let agents = skill.compatibleWith
-                    .sorted(by: { $0.rawValue < $1.rawValue })
-                    .map { $0.displayName }
-                    .joined(separator: " / ")
-                md += "| `\(skill.name)` | \(skill.source) | \(skill.frequency.rawValue) | \(agents) | \(skill.description) |\n"
+        // Helper to render a skill table
+        func renderTable(_ skills: [Skill], showAgents: Bool) {
+            md += "| Skill | 来源 | 频次 |"
+            if showAgents { md += " 适配 |" }
+            md += " 用途 |\n"
+            md += "|---|---|:---:|"
+            if showAgents { md += "---|" }
+            md += "---|\n"
+            for skill in skills.sorted(by: { $0.name < $1.name }) {
+                md += "| `\(skill.name)` | \(skill.source) | \(skill.frequency.rawValue) |"
+                if showAgents {
+                    let agents = skill.compatibleWith
+                        .sorted(by: { $0.rawValue < $1.rawValue })
+                        .map { $0.displayName }
+                        .joined(separator: " / ")
+                    md += " \(agents) |"
+                }
+                md += " \(skill.description) |\n"
             }
             md += "\n"
         }
 
-        md += "---\n\n**合计：\(skills.filter { $0.isUniversal }.count) 个通用 Skill**\n"
+        // Render by category for universal
+        md += "## 一、通用 Skill\n\n"
+        for cat in categoryOrder {
+            let catSkills = universal.filter { $0.category == cat }
+            if catSkills.isEmpty { continue }
+            let name = categoryNames[cat] ?? cat.rawValue
+            md += "### \(name)\n\n"
+            renderTable(catSkills, showAgents: true)
+        }
+
+        // Agent exclusives
+        if !codexOnly.isEmpty {
+            md += "## 二、Codex 专属\n\n"
+            for cat in categoryOrder {
+                let catSkills = codexOnly.filter { $0.category == cat }
+                if catSkills.isEmpty { continue }
+                let name = categoryNames[cat] ?? cat.rawValue
+                md += "### \(name)\n\n"
+                renderTable(catSkills, showAgents: false)
+            }
+        }
+        if !claudeOnly.isEmpty {
+            md += "## 三、Claude 专属\n\n"
+            for cat in categoryOrder {
+                let catSkills = claudeOnly.filter { $0.category == cat }
+                if catSkills.isEmpty { continue }
+                let name = categoryNames[cat] ?? cat.rawValue
+                md += "### \(name)\n\n"
+                renderTable(catSkills, showAgents: false)
+            }
+        }
+        if !hermesOnly.isEmpty {
+            md += "## 四、Hermes 专属\n\n"
+            for cat in categoryOrder {
+                let catSkills = hermesOnly.filter { $0.category == cat }
+                if catSkills.isEmpty { continue }
+                let name = categoryNames[cat] ?? cat.rawValue
+                md += "### \(name)\n\n"
+                renderTable(catSkills, showAgents: false)
+            }
+        }
+
+        // Summary
+        md += "---\n\n"
+        md += "| 分类 | 数量 |\n|---|---|\n"
+        md += "| 通用 | \(universal.count) |\n"
+        md += "| Codex 专属 | \(codexOnly.count) |\n"
+        md += "| Claude 专属 | \(claudeOnly.count) |\n"
+        md += "| Hermes 专属 | \(hermesOnly.count) |\n"
+        md += "| **合计** | **\(universal.count + codexOnly.count + claudeOnly.count + hermesOnly.count)** |\n"
 
         try? md.write(toFile: outputPath, atomically: true, encoding: .utf8)
     }
