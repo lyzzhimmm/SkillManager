@@ -6,11 +6,6 @@ struct SkillScanner {
         // 1. Parse cross-platform inventory for metadata
         let crossPlatform = InventoryParser.parse(at: inventoryPath)
 
-        // 2. Parse per-agent inventories for full skill lists
-        let claudeInventory = InventoryParser.parseAgentInventory(agent: .claude)
-        let codexInventory = InventoryParser.parseAgentInventory(agent: .codex)
-        let hermesInventory = InventoryParser.parseAgentInventory(agent: .hermes)
-
         // 3. Scan local directories
         var localSkills: [String: (dirs: [URL], agents: Set<Agent>)] = [:]
 
@@ -45,36 +40,7 @@ struct SkillScanner {
             }
         }
 
-        // 5. Add inventory-only skills (not found locally)
-        let agentInventories: [(Agent, [InventoryParser.AgentInventoryEntry])] = [
-            (.claude, claudeInventory),
-            (.codex, codexInventory),
-            (.hermes, hermesInventory),
-        ]
-
-        for (agent, entries) in agentInventories {
-            for entry in entries {
-                if skillMap[entry.name] != nil { continue }
-
-                let cp = crossPlatform[entry.name]
-
-                skillMap[entry.name] = Skill(
-                    id: entry.name,
-                    name: entry.name,
-                    description: cp?.description ?? entry.description,
-                    category: Category.classify(name: entry.name, description: cp?.description ?? entry.description),
-                    filePath: URL(fileURLWithPath: "/dev/null"),
-                    hasReferences: false,
-                    frequency: cp?.frequency ?? entry.frequency,
-                    source: cp?.source ?? entry.source,
-                    isUniversal: cp?.isUniversal ?? false,
-                    migration: cp?.migration ?? entry.migration,
-                    originAgent: agent,
-                    deployedIn: [agent],
-                    isLocal: false
-                )
-            }
-        }
+        // 5. Skip inventory-only skills — only show skills that exist locally or in vault
 
         // 6. Only keep portable and needsAdaptation — drop exclusive
         let filtered = skillMap.values.filter { skill -> Bool in
