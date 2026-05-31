@@ -23,6 +23,10 @@ struct SkillScanner {
             scanDirectory(agent.skillsDirectory, into: &localSkills, agents: [agent])
         }
 
+        // Scan skill-vault repo (pull source)
+        let vaultDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".skill-vault/skills")
+        scanDirectory(vaultDir, into: &localSkills, agents: Set(Agent.allCases))
+
         // 4. Merge: start with local skills (deduplicate by parsedName)
         var skillMap: [String: Skill] = [:]
 
