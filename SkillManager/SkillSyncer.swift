@@ -41,6 +41,7 @@ struct SkillSyncer {
         }
 
         var copied = 0
+        var seen = Set<String>()  // Track unique skill names
         let home = FileManager.default.homeDirectoryForCurrentUser
 
         // Scan all agent directories
@@ -65,6 +66,9 @@ struct SkillSyncer {
                 guard FileManager.default.fileExists(atPath: skillMd.path) else { continue }
 
                 let name = item.lastPathComponent
+                guard !seen.contains(name) else { continue }  // Skip duplicates
+                seen.insert(name)
+
                 let targetDir = URL(fileURLWithPath: vaultSkillsDir).appendingPathComponent(name)
 
                 // Remove old version
