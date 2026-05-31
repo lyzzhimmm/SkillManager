@@ -100,34 +100,43 @@ enum Category: String, CaseIterable, Hashable {
     case arch      = "架构"
     case other     = "其他"
 
-    static func classify(name: String, description: String) -> Category {
-        let text = (name + " " + description).lowercased()
-        if text.contains("plan") || text.contains("design") || text.contains("brainstorm") ||
-           text.contains("grill") || text.contains("prototype") || text.contains("prd") {
+    static func classify(name: String, description: String, tags: [String] = []) -> Category {
+        // First try tags
+        let tagText = tags.joined(separator: " ").lowercased()
+        if tagText.contains("plan") || tagText.contains("design") || tagText.contains("brainstorm") ||
+           tagText.contains("grill") || tagText.contains("prototype") || tagText.contains("prd") {
             return .planning
         }
-        if text.contains("build") || text.contains("tdd") || text.contains("test") ||
-           text.contains("feature") {
+        if tagText.contains("build") || tagText.contains("tdd") || tagText.contains("test") ||
+           tagText.contains("feature") || tagText.contains("dev") {
             return .dev
         }
-        if text.contains("review") || text.contains("code-review") || text.contains("quality") {
+        if tagText.contains("review") || tagText.contains("code-review") || tagText.contains("quality") ||
+           tagText.contains("qa") {
             return .quality
         }
-        if text.contains("diagnose") || text.contains("debug") {
+        if tagText.contains("diagnose") || tagText.contains("debug") {
             return .debug
         }
-        if text.contains("handoff") || text.contains("session") || text.contains("issue") ||
-           text.contains("triage") || text.contains("project") {
+        if tagText.contains("handoff") || tagText.contains("session") || tagText.contains("issue") ||
+           tagText.contains("triage") || tagText.contains("project") {
             return .project
         }
-        if text.contains("web") || text.contains("browser") || text.contains("search") ||
-           text.contains("scrape") {
+        if tagText.contains("web") || tagText.contains("browser") || tagText.contains("search") ||
+           tagText.contains("scrape") || tagText.contains("ux") {
             return .web
         }
-        if text.contains("doc") || text.contains("article") || text.contains("content") ||
-           text.contains("writing") || text.contains("pdf") {
+        if tagText.contains("doc") || tagText.contains("article") || tagText.contains("content") ||
+           tagText.contains("writing") || tagText.contains("pdf") || tagText.contains("video") ||
+           tagText.contains("media") {
             return .content
         }
+        if tagText.contains("architecture") || tagText.contains("pattern") || tagText.contains("api") ||
+           tagText.contains("mcp") {
+            return .arch
+        }
+        // Fallback to name + description
+        let text = (name + " " + description).lowercased()
         if text.contains("architecture") || text.contains("pattern") || text.contains("api") ||
            text.contains("mcp") {
             return .arch

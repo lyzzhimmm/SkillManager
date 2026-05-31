@@ -75,6 +75,7 @@ struct SkillScanner {
 
         var parsedName = name
         var parsedDesc = ""
+        var parsedTags: [String] = []
 
         // Parse YAML frontmatter
         if let start = content.range(of: "---\n"),
@@ -82,12 +83,14 @@ struct SkillScanner {
             let frontmatter = String(content[start.upperBound..<end.lowerBound])
             var inDescription = false
             var descLines: [String] = []
+            var inTags = false
             for line in frontmatter.components(separatedBy: "\n") {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 if trimmed.hasPrefix("name:") {
                     parsedName = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
                         .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
                     inDescription = false
+                    inTags = false
                 } else if trimmed.hasPrefix("description:") {
                     let value = trimmed.dropFirst(12).trimmingCharacters(in: .whitespaces)
                         .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
@@ -97,10 +100,28 @@ struct SkillScanner {
                     } else {
                         inDescription = true
                     }
+                    inTags = false
+                } else if trimmed.hasPrefix("tags:") {
+                    inDescription = false
+                    inTags = true
+                    // Parse inline tags: tags: [tag1, tag2, tag3]
+                    let value = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                    if value.hasPrefix("[") {
+                        let tagsStr = value.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+                        parsedTags = tagsStr.components(separatedBy: ",")
+                            .map { $0.trimmingCharacters(in: .whitespaces) }
+                            .filter { !$0.isEmpty && !$0.hasPrefix("<") }
+                    }
                 } else if inDescription && !trimmed.isEmpty && (trimmed.hasPrefix(" ") || trimmed.hasPrefix("\t")) {
                     descLines.append(String(trimmed).trimmingCharacters(in: .whitespaces))
+                } else if inTags && trimmed.hasPrefix("- ") {
+                    let tag = String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                    if !tag.isEmpty && !tag.hasPrefix("<") {
+                        parsedTags.append(tag)
+                    }
                 } else {
                     inDescription = false
+                    inTags = false
                 }
             }
             if !descLines.isEmpty {
@@ -134,7 +155,7 @@ struct SkillScanner {
         let meta = crossPlatform[parsedName] ?? crossPlatform[name]
         let sup = supplement[parsedName] ?? supplement[name]
 
-        let category = Category.classify(name: parsedName, description: parsedDesc)
+        let category = Category.classify(name: parsedName, description: parsedDesc, tags: parsedTags)
         let frequency = sup?.frequency ?? meta?.frequency ?? .low
         let source = meta?.source ?? ""
         let isUniversal = meta?.isUniversal ?? false
