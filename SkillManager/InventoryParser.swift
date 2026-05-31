@@ -59,6 +59,7 @@ struct InventoryParser {
             // Source
             if c == "ECC" || c == "ECC（阿志）" { result.source = "ECC"; continue }
             if c == "阿志" { result.source = "阿志"; continue }
+            if c == "Superpower" { result.source = "Superpower"; continue }
             if c == "Matt Pocock" || c == "Matt" { result.source = "Matt"; continue }
             if c == "Codex 插件" || c == "本机 Codex" || c == "Codex 系统" { result.source = "Codex"; continue }
             if c == "gstack" || c.contains("gstack") { result.source = "gstack"; continue }

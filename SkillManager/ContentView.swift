@@ -11,7 +11,6 @@ struct ContentView: View {
         ?? "/Volumes/PJSSD/通用skill及指南/Skill 清单/Agents Skill 跨平台对比清单.md"
     @State private var showToast = false
     @State private var toastMessage = ""
-    @FocusState private var isSearchFocused: Bool
     @Environment(\.colorScheme) private var scheme
     private var isDark: Bool { scheme == .dark }
 
@@ -33,6 +32,7 @@ struct ContentView: View {
             mainContent
         }
         .frame(minWidth: 1100, minHeight: 600)
+        .searchable(text: $filter.searchText, prompt: "搜索 Skill...")
         .onAppear { store.load(inventoryPath: inventoryPath) }
         .onChange(of: store.lastError) { _, newError in
             if let err = newError {
@@ -59,7 +59,6 @@ struct ContentView: View {
 
     private var mainContent: some View {
         VStack(spacing: 0) {
-            searchBar
             Divider()
 
             if filteredSkills.isEmpty && !store.skills.isEmpty {
@@ -90,27 +89,6 @@ struct ContentView: View {
         }
         .background(isDark ? Color(hex: 0x1C1C1E) : Color(hex: 0xF6F6F6))
         .toast(isShowing: $showToast, message: toastMessage)
-    }
-
-    // MARK: - Search Bar
-
-    private var searchBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(isDark ? Color(hex: 0x6E6E73) : Color(hex: 0xAEAEB2))
-            TextField("搜索 Skill...", text: $filter.searchText)
-                .font(.system(size: 13))
-                .textFieldStyle(.plain)
-                .focused($isSearchFocused)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(isDark ? Color(hex: 0x2C2C2E) : Color(hex: 0xE8E8EA))
-        .cornerRadius(8)
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 6)
-        .onTapGesture { isSearchFocused = true }
     }
 
     // MARK: - Table
