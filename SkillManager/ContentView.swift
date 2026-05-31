@@ -230,38 +230,21 @@ struct ContentView: View {
     // MARK: - Batch Deploy
 
     private struct BatchDeployInfo {
-        let portableCount: Int
-        let clipboardCount: Int
+        let deployCount: Int
         let message: String
     }
 
     private func batchDeployInfo(agent: Agent) -> BatchDeployInfo {
         let selected = store.skills.filter { selectedSkillIds.contains($0.id) }
-        let portable = selected.filter { $0.isLocal && $0.migration.canDirectDeploy && !$0.deployedIn.contains(agent) }
-        let clipboard = selected.filter { skill in
-            !skill.deployedIn.contains(agent) && (!skill.isLocal || !skill.migration.canDirectDeploy)
-        }
-        var parts: [String] = []
-        if !portable.isEmpty { parts.append("部署 \(portable.count) 个（symlink）") }
-        if !clipboard.isEmpty { parts.append("复制 \(clipboard.count) 个到剪贴板") }
-        let msg = parts.isEmpty ? "所有选中的 Skill 已部署到 \(agent.displayName)" : parts.joined(separator: "，")
-        return BatchDeployInfo(portableCount: portable.count, clipboardCount: clipboard.count, message: msg)
+        let toDeploy = selected.filter { !$0.deployedIn.contains(agent) }
+        let msg = toDeploy.isEmpty ? "所有选中的 Skill 已部署到 \(agent.displayName)" : "部署 \(toDeploy.count) 个"
+        return BatchDeployInfo(deployCount: toDeploy.count, message: msg)
     }
 
     private func executeBatchDeploy(agent: Agent) {
         let selected = store.skills.filter { selectedSkillIds.contains($0.id) }
-        let portableIds = selected.filter { $0.isLocal && $0.migration.canDirectDeploy && !$0.deployedIn.contains(agent) }.map(\.id)
-        store.batchDeploy(skillIds: Set(portableIds), to: agent)
-
-        let clipboardSkills = selected.filter { skill in
-            !skill.deployedIn.contains(agent) && (!skill.isLocal || !skill.migration.canDirectDeploy)
-        }
-        if !clipboardSkills.isEmpty {
-            let prompts = clipboardSkills.map { "请安装 Skill `\($0.name)` — \($0.description)" }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(prompts.joined(separator: "\n\n"), forType: .string)
-            toast("已复制 \(clipboardSkills.count) 个 Skill 的安装提示到剪贴板")
-        }
+        let toDeployIds = selected.filter { !$0.deployedIn.contains(agent) }.map(\.id)
+        store.batchDeploy(skillIds: Set(toDeployIds), to: agent)
     }
 
     // MARK: - Helpers
