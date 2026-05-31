@@ -249,12 +249,6 @@ struct ContentView: View {
 
     // MARK: - Helpers
 
-    private func copyToClipboard(prompt: String, toast message: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(prompt, forType: .string)
-        toast(message)
-    }
-
     private func toast(_ message: String) {
         toastMessage = message
         SkillManager.showToast(message, isShowing: $showToast)
