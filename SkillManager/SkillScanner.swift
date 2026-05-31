@@ -92,14 +92,11 @@ struct SkillScanner {
             let name = cells[0].replacingOccurrences(of: "`", with: "").trimmingCharacters(in: .whitespaces)
             guard !name.isEmpty, name != "Skill", name.count < 80 else { continue }
 
-            // Parse compatible agents from "当前所在" column (for universal skills)
+            // Parse compatible agents from "当前所在" column
             var compatibleWith: Set<Agent> = []
-            if inUniversalSection && cells.count >= 3 {
-                let location = cells[2]
-                if location.contains("Claude") { compatibleWith.insert(.claude) }
-                if location.contains("Codex") { compatibleWith.insert(.codex) }
-                if location.contains("Hermes") { compatibleWith.insert(.hermes) }
-                if compatibleWith.isEmpty { compatibleWith = Set(Agent.allCases) }
+            if inUniversalSection {
+                // Universal skills are compatible with ALL agents, regardless of "当前所在"
+                compatibleWith = Set(Agent.allCases)
             } else if inCodexSection {
                 compatibleWith = [.codex]
             } else if inClaudeSection {
