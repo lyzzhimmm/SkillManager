@@ -32,7 +32,6 @@ struct ContentView: View {
             mainContent
         }
         .frame(minWidth: 1100, minHeight: 600)
-        .searchable(text: $filter.searchText, prompt: "搜索 Skill...")
         .onAppear { store.load(inventoryPath: inventoryPath) }
         .onChange(of: store.lastError) { _, newError in
             if let err = newError {
@@ -59,6 +58,13 @@ struct ContentView: View {
 
     private var mainContent: some View {
         VStack(spacing: 0) {
+            // Search bar using native NSSearchField
+            HStack(spacing: 8) {
+                SearchField(text: $filter.searchText, placeholder: "搜索 Skill...")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
             Divider()
 
             if filteredSkills.isEmpty && !store.skills.isEmpty {
