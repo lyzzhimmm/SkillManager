@@ -133,23 +133,23 @@ struct SkillSyncer {
             allSkills[name] = (agents, skillMd)
         }
 
-        // Classify
+        // 4. Classify: vault skills are universal by default
         var universal: [(name: String, agents: Set<Agent>)] = []
         var claudeOnly: [String] = []
         var codexOnly: [String] = []
         var hermesOnly: [String] = []
 
         for (name, info) in allSkills {
-            if info.agents == Set(Agent.allCases) {
+            if info.agents == Set(Agent.allCases) || info.agents.count >= 2 {
                 universal.append((name, info.agents))
-            } else if info.agents == [.claude] {
+            } else if info.agents.contains(.claude) && !info.agents.contains(.codex) && !info.agents.contains(.hermes) {
                 claudeOnly.append(name)
-            } else if info.agents == [.codex] {
+            } else if info.agents.contains(.codex) && !info.agents.contains(.claude) && !info.agents.contains(.hermes) {
                 codexOnly.append(name)
-            } else if info.agents == [.hermes] {
+            } else if info.agents.contains(.hermes) && !info.agents.contains(.claude) && !info.agents.contains(.codex) {
                 hermesOnly.append(name)
             } else {
-                // Multiple but not all — classify by which ones
+                // Mixed or empty — classify as universal
                 universal.append((name, info.agents))
             }
         }
