@@ -190,9 +190,49 @@ struct SkillSyncer {
         return copied
     }
 
+    // MARK: - Supplement Inventory Parser
+
+    struct SupplementEntry {
+        let frequency: Frequency
+        let description: String
+    }
+
+    static func parseSupplement() -> [String: SupplementEntry] {
+        let supplementPath = (localRepoPath as NSString).appendingPathComponent("inventory/supplement.md")
+        guard let content = try? String(contentsOfFile: supplementPath, encoding: .utf8) else {
+            return [:]
+        }
+
+        var result: [String: SupplementEntry] = [:]
+        for line in content.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("|") || trimmed.hasPrefix("`") else { continue }
+            if trimmed.contains("---") { continue }
+
+            let cells = trimmed.components(separatedBy: "|")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            guard cells.count >= 3 else { continue }
+
+            let name = cells[0].replacingOccurrences(of: "`", with: "").trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty, name != "Skill" else { continue }
+
+            var frequency: Frequency = .low
+            if cells[1] == "高" { frequency = .high }
+            else if cells[1] == "中" { frequency = .medium }
+
+            let description = cells[2]
+
+            result[name] = SupplementEntry(frequency: frequency, description: description)
+        }
+        return result
+    }
+
     // MARK: - Auto-generate Complete Inventory from Scan Results
 
     static func generateInventory(skills: [Skill]) {
+        // Load supplement for frequency/description
+        let supplement = parseSupplement()
         let inventoryDir = (localRepoPath as NSString).appendingPathComponent("inventory")
         if !FileManager.default.fileExists(atPath: inventoryDir) {
             try? FileManager.default.createDirectory(atPath: inventoryDir, withIntermediateDirectories: true)
@@ -250,7 +290,9 @@ struct SkillSyncer {
             if showAgents { md += "---|" }
             md += "---|\n"
             for skill in skills.sorted(by: { $0.name < $1.name }) {
-                md += "| `\(skill.name)` | \(skill.source) | \(skill.frequency.rawValue) |"
+                let freq = supplement[skill.name]?.frequency ?? skill.frequency
+                let desc = supplement[skill.name]?.description ?? skill.description
+                md += "| `\(skill.name)` | \(skill.source) | \(freq.rawValue) |"
                 if showAgents {
                     let agents = skill.compatibleWith
                         .sorted(by: { $0.rawValue < $1.rawValue })
@@ -258,7 +300,7 @@ struct SkillSyncer {
                         .joined(separator: " / ")
                     md += " \(agents) |"
                 }
-                md += " \(skill.description) |\n"
+                md += " \(desc) |\n"
             }
             md += "\n"
         }
