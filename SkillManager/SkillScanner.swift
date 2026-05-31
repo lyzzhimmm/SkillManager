@@ -3,67 +3,62 @@ import Foundation
 struct SkillScanner {
 
     static func scanAll(inventoryPath: String? = nil) -> [Skill] {
-        // 1. Parse cross-platform inventory for metadata
-        let crossPlatform = InventoryParser.parse(at: inventoryPath)
-
-        // 1.5. Parse supplement for frequency/description
+        // 1. Parse supplement for frequency/description (metadata only, not universal classification)
         let supplement = SkillSyncer.parseSupplement()
 
-        // 3. Scan local directories
+        // 2. Scan local directories — track which agents each skill is in
         var localSkills: [String: (dirs: [URL], agents: Set<Agent>)] = [:]
 
-        // Scan ~/.agents/skills/ (shared — deployed to ALL agents)
+        // ~/.agents/skills/ → shared, deployed to ALL agents
         let sharedDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".agents/skills")
         scanDirectory(sharedDir, into: &localSkills, agents: Set(Agent.allCases))
 
-        // Scan each agent's main skills directory
+        // Each agent's main directory
         for agent in Agent.allCases {
             scanDirectory(agent.skillsDirectory, into: &localSkills, agents: [agent])
         }
 
-        // Scan skill-vault repo (pull source) — vault skills are universal
+        // ~/.skill-vault/skills/ → universal source
         let vaultDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".skill-vault/skills")
         scanDirectory(vaultDir, into: &localSkills, agents: Set(Agent.allCases))
 
-        // 4. Merge: start with local skills (deduplicate by parsedName)
+        // 3. Merge and classify
         var skillMap: [String: Skill] = [:]
 
         for (name, info) in localSkills {
-            if let skill = parseLocalSkill(name: name, dirs: info.dirs, agents: info.agents, crossPlatform: crossPlatform, supplement: supplement) {
-                // Use parsedName as key to avoid duplicates
-                let key = skill.name
-                if let existing = skillMap[key] {
-                    // Merge: add agents from this directory to existing skill
-                    var merged = existing
-                    merged.deployedIn.formUnion(skill.deployedIn)
-                    // If now in all 3 agents → mark as universal
-                    if merged.deployedIn.count >= 3 || merged.deployedIn == Set(Agent.allCases) {
-                        merged.isUniversal = true
-                        merged.compatibleWith = Set(Agent.allCases)
-                    }
-                    skillMap[key] = merged
-                } else {
-                    // Check if already universal (e.g., from vault scan with allAgents)
-                    var skill = skill
-                    if skill.deployedIn == Set(Agent.allCases) {
-                        skill.isUniversal = true
-                        skill.compatibleWith = Set(Agent.allCases)
-                    }
-                    skillMap[key] = skill
-                }
+            guard let skill = parseLocalSkill(name: name, dirs: info.dirs, agents: info.agents, supplement: supplement) else {
+                continue
+            }
+
+            let key = skill.name
+            if var existing = skillMap[key] {
+                // Merge: combine deployedIn
+                existing.deployedIn.formUnion(skill.deployedIn)
+                existing.compatibleWith.formUnion(skill.compatibleWith)
+                skillMap[key] = existing
+            } else {
+                skillMap[key] = skill
             }
         }
 
-        // 5. Skip inventory-only skills — only show skills that exist locally or in vault
+        // 4. Classify universal AFTER merge
+        //    universal = in all 3 agents OR in shared/vault directory
+        for (key, skill) in skillMap {
+            var updated = skill
+            let inAllAgents = updated.deployedIn == Set(Agent.allCases)
+            let inSharedOrVault = updated.deployedIn.contains(.claude) &&
+                                  updated.deployedIn.contains(.codex) &&
+                                  updated.deployedIn.contains(.hermes)
 
-        // 6. Only keep portable and needsAdaptation — drop exclusive
-        let filtered = skillMap.values.filter { skill -> Bool in
-            if case .exclusive = skill.migration { return false }
-            return true
+            if inAllAgents || inSharedOrVault {
+                updated.isUniversal = true
+                updated.compatibleWith = Set(Agent.allCases)
+            }
+            skillMap[key] = updated
         }
 
-        // 7. Sort: frequency high→medium→low, then alphabetically
-        return filtered.sorted { a, b in
+        // 5. Sort: frequency high→medium→low, then alphabetically
+        return skillMap.values.sorted { a, b in
             if a.frequency != b.frequency { return a.frequency < b.frequency }
             return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
         }
@@ -73,7 +68,6 @@ struct SkillScanner {
         name: String,
         dirs: [URL],
         agents: Set<Agent>,
-        crossPlatform: [String: InventoryParser.SkillMeta],
         supplement: [String: SkillSyncer.SupplementEntry] = [:]
     ) -> Skill? {
         let skillMd = dirs[0].appendingPathComponent("SKILL.md")
@@ -110,7 +104,6 @@ struct SkillScanner {
                 } else if trimmed.hasPrefix("tags:") {
                     inDescription = false
                     inTags = true
-                    // Parse inline tags: tags: [tag1, tag2, tag3]
                     let value = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
                     if value.hasPrefix("[") {
                         let tagsStr = value.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
@@ -158,33 +151,27 @@ struct SkillScanner {
             atPath: dirs[0].appendingPathComponent("references").path
         )
 
-        let meta = crossPlatform[parsedName] ?? crossPlatform[name]
+        // Metadata from supplement only (not from inventory for classification)
         let sup = supplement[parsedName] ?? supplement[name]
-
         let category = Category.classify(name: parsedName, description: parsedDesc, tags: parsedTags)
-        let frequency = sup?.frequency ?? meta?.frequency ?? .low
-        let source = meta?.source ?? ""
-        let isUniversal = meta?.isUniversal ?? false
-        let migration = meta?.migration ?? .portable
-        // Universal skills are compatible with all agents; others use inventory data + installed agents
-        var compatibleWith: Set<Agent> = isUniversal ? Set(Agent.allCases) : (meta?.compatibleWith ?? [])
-        // If skill is installed in an agent, it's compatible with that agent
-        compatibleWith.formUnion(agents)
+        let frequency = sup?.frequency ?? .low
+        let source = sup?.source ?? ""
+        let description = sup?.description ?? parsedDesc
 
-        let inventoryDesc = sup?.description ?? meta?.description.trimmingCharacters(in: .whitespaces) ?? ""
-        let finalDesc = inventoryDesc.isEmpty ? parsedDesc : inventoryDesc
+        // compatibleWith = which agents this skill is actually installed in
+        let compatibleWith = agents
 
         return Skill(
             id: name,
             name: parsedName,
-            description: finalDesc,
+            description: description,
             category: category,
             filePath: skillMd,
             hasReferences: hasRefs,
             frequency: frequency,
             source: source,
-            isUniversal: isUniversal,
-            migration: migration,
+            isUniversal: false,  // Will be set after merge
+            migration: .portable,
             originAgent: agents.first,
             deployedIn: agents,
             isLocal: true,

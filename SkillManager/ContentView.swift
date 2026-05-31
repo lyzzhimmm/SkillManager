@@ -27,18 +27,20 @@ struct ContentView: View {
                 filter: $filter,
                 skillCounts: store.categoryCounts,
                 totalCount: store.skills.count,
-                onReload: { store.load(inventoryPath: inventoryPath) },
-                syncStatus: store.syncStatus,
-                isSyncing: store.isSyncing,
-                onSyncPull: { store.syncPull() },
+                onReload: { store.load() },
+                vaultStatus: store.vaultStatus,
+                isProcessing: store.isProcessing,
+                onPull: { store.pull() },
+                onPush: { store.push() },
                 onCollect: { store.collect() },
-                onPush: { store.pushOnly() }
+                onGenerate: { store.generate() },
+                onMatch: { store.match() }
             )
 
             mainContent
         }
         .frame(minWidth: 1100, minHeight: 600)
-        .onAppear { store.load(inventoryPath: inventoryPath) }
+        .onAppear { store.load() }
         .onChange(of: store.lastError) { _, newError in
             if let err = newError {
                 toast(err)

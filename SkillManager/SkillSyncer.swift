@@ -27,118 +27,9 @@ struct SkillSyncer {
         return home.appendingPathComponent(".skill-vault").path
     }
 
-    // MARK: - Status
+    // MARK: - Step 1: Collect (Agent dirs → Vault)
 
-    struct SyncStatus {
-        let isCloned: Bool
-        let lastCommit: String?
-        let behind: Int
-        let ahead: Int
-        let skillCount: Int
-    }
-
-    static func status() -> SyncStatus {
-        let repoDir = localRepoPath
-        let gitDir = (repoDir as NSString).appendingPathComponent(".git")
-
-        guard FileManager.default.fileExists(atPath: gitDir) else {
-            return SyncStatus(isCloned: false, lastCommit: nil, behind: 0, ahead: 0, skillCount: 0)
-        }
-
-        let lastCommit = runGit(args: ["log", "-1", "--format=%h %s"], cwd: repoDir).stdout
-        let behind = Int(runGit(args: ["rev-list", "--count", "HEAD..@{u}"], cwd: repoDir).stdout) ?? 0
-        let ahead = Int(runGit(args: ["rev-list", "--count", "@{u}..HEAD"], cwd: repoDir).stdout) ?? 0
-
-        let skillsDir = (repoDir as NSString).appendingPathComponent("skills")
-        let count = (try? FileManager.default.contentsOfDirectory(atPath: skillsDir))?.count ?? 0
-
-        return SyncStatus(
-            isCloned: true,
-            lastCommit: lastCommit.isEmpty ? nil : lastCommit,
-            behind: behind,
-            ahead: ahead,
-            skillCount: count
-        )
-    }
-
-    // MARK: - Clone
-
-    @discardableResult
-    static func clone() throws -> String {
-        let parent = (localRepoPath as NSString).deletingLastPathComponent
-        if !FileManager.default.fileExists(atPath: parent) {
-            try FileManager.default.createDirectory(atPath: parent, withIntermediateDirectories: true)
-        }
-
-        let result = runProcess("/usr/bin/git", args: ["clone", repoURL, localRepoPath])
-        guard result.success else {
-            throw SyncError.cloneFailed(result.stderr)
-        }
-        return "克隆成功"
-    }
-
-    // MARK: - Pull
-
-    @discardableResult
-    static func pull() throws -> String {
-        guard FileManager.default.fileExists(atPath: (localRepoPath as NSString).appendingPathComponent(".git")) else {
-            try clone()
-            return "首次克隆完成"
-        }
-
-        let result = runGit(args: ["pull", "--rebase"], cwd: localRepoPath)
-        guard result.success else {
-            throw SyncError.pullFailed(result.stderr)
-        }
-        return result.stdout.isEmpty ? "已是最新" : result.stdout
-    }
-
-    // MARK: - Push (add + commit + push)
-
-    @discardableResult
-    static func push(message: String = "sync: 更新通用 Skill") throws -> String {
-        // Stage all changes
-        let addResult = runGit(args: ["add", "-A"], cwd: localRepoPath)
-        guard addResult.success else {
-            throw SyncError.commitFailed(addResult.stderr)
-        }
-
-        // Check if there's anything to commit
-        let diffResult = runGit(args: ["diff", "--cached", "--quiet"], cwd: localRepoPath)
-        if diffResult.success {
-            return "没有需要推送的变更"
-        }
-
-        // Commit
-        let commitResult = runGit(args: ["commit", "-m", message], cwd: localRepoPath)
-        guard commitResult.success else {
-            throw SyncError.commitFailed(commitResult.stderr)
-        }
-
-        // Push
-        let pushResult = runGit(args: ["push"], cwd: localRepoPath)
-        guard pushResult.success else {
-            throw SyncError.pushFailed(pushResult.stderr)
-        }
-        return "推送成功"
-    }
-
-    // MARK: - List Remote Skills
-
-    static func listVaultSkills() -> [String] {
-        let skillsDir = (localRepoPath as NSString).appendingPathComponent("skills")
-        guard let contents = try? FileManager.default.contentsOfDirectory(atPath: skillsDir) else {
-            return []
-        }
-        return contents.filter { name in
-            let skillFile = (skillsDir as NSString).appendingPathComponent(name).appending("/SKILL.md")
-            return FileManager.default.fileExists(atPath: skillFile)
-        }.sorted()
-    }
-
-    // MARK: - Collect ALL Skills → Vault
-
-    static func collectToVault(skills: [Skill]) -> Int {
+    static func collectToVault() -> Int {
         let vaultSkillsDir = (localRepoPath as NSString).appendingPathComponent("skills")
 
         // Ensure vault exists
@@ -150,53 +41,195 @@ struct SkillSyncer {
         }
 
         var copied = 0
-        var allNames = Set<String>()
+        let home = FileManager.default.homeDirectoryForCurrentUser
 
-        // Collect ALL local skills (universal + exclusive)
-        for skill in skills {
-            guard skill.isLocal else { continue }
-            allNames.insert(skill.name)
+        // Scan all agent directories
+        let dirs: [(Set<Agent>, URL)] = [
+            (Set(Agent.allCases), home.appendingPathComponent(".agents/skills")),
+            ([.claude], home.appendingPathComponent(".claude/skills")),
+            ([.codex], home.appendingPathComponent(".codex/skills")),
+            (Set(Agent.allCases), home.appendingPathComponent(".hermes/skills")),
+        ]
 
-            let sourceDir = skill.filePath.deletingLastPathComponent()
-            let targetDir = URL(fileURLWithPath: vaultSkillsDir).appendingPathComponent(skill.name)
+        for (agents, dir) in dirs {
+            guard let contents = try? FileManager.default.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
 
-            // Remove old version if exists
-            if FileManager.default.fileExists(atPath: targetDir.path) {
-                try? FileManager.default.removeItem(at: targetDir)
-            }
+            for item in contents {
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir),
+                      isDir.boolValue else { continue }
+                let skillMd = item.appendingPathComponent("SKILL.md")
+                guard FileManager.default.fileExists(atPath: skillMd.path) else { continue }
 
-            do {
-                try FileManager.default.copyItem(at: sourceDir, to: targetDir)
-                copied += 1
-            } catch {
-                // Skip failed copies silently
-            }
-        }
+                let name = item.lastPathComponent
+                let targetDir = URL(fileURLWithPath: vaultSkillsDir).appendingPathComponent(name)
 
-        // Clean up vault entries that no longer exist locally (only if we collected something)
-        if !allNames.isEmpty {
-            if let existing = try? FileManager.default.contentsOfDirectory(atPath: vaultSkillsDir) {
-                for name in existing {
-                    if !allNames.contains(name) {
-                        try? FileManager.default.removeItem(
-                            atPath: (vaultSkillsDir as NSString).appendingPathComponent(name)
-                        )
-                    }
+                // Remove old version
+                if FileManager.default.fileExists(atPath: targetDir.path) {
+                    try? FileManager.default.removeItem(at: targetDir)
+                }
+
+                do {
+                    try FileManager.default.copyItem(at: item, to: targetDir)
+                    copied += 1
+                } catch {
+                    // Skip failed copies
                 }
             }
         }
 
-        // Auto-generate inventory from scan results
-        generateInventory(skills: skills)
-
         return copied
     }
 
-    // MARK: - Supplement Inventory Parser
+    // MARK: - Step 2: Generate Inventory (Vault → Cross-platform inventory)
+
+    static func generateInventory() {
+        let vaultSkillsDir = (localRepoPath as NSString).appendingPathComponent("skills")
+        let inventoryDir = (localRepoPath as NSString).appendingPathComponent("inventory")
+
+        if !FileManager.default.fileExists(atPath: inventoryDir) {
+            try? FileManager.default.createDirectory(atPath: inventoryDir, withIntermediateDirectories: true)
+        }
+
+        let outputPath = (inventoryDir as NSString).appendingPathComponent("Agent Skill 跨平台对比清单.md")
+
+        // Read supplement for metadata
+        let supplement = parseSupplement()
+
+        // Scan vault to get all skills and their agents
+        var allSkills: [String: (agents: Set<Agent>, skillMd: URL)] = [:]
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: URL(fileURLWithPath: vaultSkillsDir),
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        for item in contents {
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir),
+                  isDir.boolValue else { continue }
+            let skillMd = item.appendingPathComponent("SKILL.md")
+            guard FileManager.default.fileExists(atPath: skillMd.path) else { continue }
+
+            let name = item.lastPathComponent
+            // Check which agent directories have this skill
+            var agents = Set<Agent>()
+            for agent in Agent.allCases {
+                let agentDir = agent.skillsDirectory.appendingPathComponent(name)
+                if FileManager.default.fileExists(atPath: agentDir.path) {
+                    agents.insert(agent)
+                }
+            }
+            // Check shared dir
+            let sharedDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".agents/skills/\(name)")
+            if FileManager.default.fileExists(atPath: sharedDir.path) {
+                agents = Set(Agent.allCases)
+            }
+
+            allSkills[name] = (agents, skillMd)
+        }
+
+        // Classify
+        var universal: [(name: String, agents: Set<Agent>)] = []
+        var claudeOnly: [String] = []
+        var codexOnly: [String] = []
+        var hermesOnly: [String] = []
+
+        for (name, info) in allSkills {
+            if info.agents == Set(Agent.allCases) {
+                universal.append((name, info.agents))
+            } else if info.agents == [.claude] {
+                claudeOnly.append(name)
+            } else if info.agents == [.codex] {
+                codexOnly.append(name)
+            } else if info.agents == [.hermes] {
+                hermesOnly.append(name)
+            } else {
+                // Multiple but not all — classify by which ones
+                universal.append((name, info.agents))
+            }
+        }
+
+        // Generate markdown
+        var md = "# Agent Skill 跨平台对比清单\n\n"
+        md += "> 自动生成 — 从 Agent 目录扫描\n\n"
+
+        // Universal
+        md += "## 一、通用 Skill\n\n"
+        md += "| Skill | 来源 | 当前所在 | 频次 | 用途 |\n"
+        md += "|---|---|---|:---:|---|\n"
+        for item in universal.sorted(by: { $0.name < $1.name }) {
+            let sup = supplement[item.name]
+            let agents = item.agents.sorted(by: { $0.rawValue < $1.rawValue })
+                .map { $0.displayName }.joined(separator: " / ")
+            let source = sup?.source ?? ""
+            let freq = sup?.frequency ?? .low
+            let desc = sup?.description ?? ""
+            md += "| `\(item.name)` | \(source) | \(agents) | \(freq.rawValue) | \(desc) |\n"
+        }
+
+        // Codex exclusive
+        if !codexOnly.isEmpty {
+            md += "\n## 二、Codex 专属\n\n"
+            md += "| Skill | 频次 | 用途 |\n"
+            md += "|---|:---:|---|\n"
+            for name in codexOnly.sorted() {
+                let sup = supplement[name]
+                let freq = sup?.frequency ?? .low
+                let desc = sup?.description ?? ""
+                md += "| `\(name)` | \(freq.rawValue) | \(desc) |\n"
+            }
+        }
+
+        // Claude exclusive
+        if !claudeOnly.isEmpty {
+            md += "\n## 三、Claude 专属\n\n"
+            md += "| Skill | 频次 | 用途 |\n"
+            md += "|---|:---:|---|\n"
+            for name in claudeOnly.sorted() {
+                let sup = supplement[name]
+                let freq = sup?.frequency ?? .low
+                let desc = sup?.description ?? ""
+                md += "| `\(name)` | \(freq.rawValue) | \(desc) |\n"
+            }
+        }
+
+        // Hermes exclusive
+        if !hermesOnly.isEmpty {
+            md += "\n## 四、Hermes 专属\n\n"
+            md += "| Skill | 频次 | 用途 |\n"
+            md += "|---|:---:|---|\n"
+            for name in hermesOnly.sorted() {
+                let sup = supplement[name]
+                let freq = sup?.frequency ?? .low
+                let desc = sup?.description ?? ""
+                md += "| `\(name)` | \(freq.rawValue) | \(desc) |\n"
+            }
+        }
+
+        // Summary
+        md += "\n---\n\n"
+        md += "| 分类 | 数量 |\n|---|---|\n"
+        md += "| 通用 | \(universal.count) |\n"
+        md += "| Codex 专属 | \(codexOnly.count) |\n"
+        md += "| Claude 专属 | \(claudeOnly.count) |\n"
+        md += "| Hermes 专属 | \(hermesOnly.count) |\n"
+        md += "| **合计** | **\(allSkills.count)** |\n"
+
+        try? md.write(toFile: outputPath, atomically: true, encoding: .utf8)
+    }
+
+    // MARK: - Step 3: Match (Apply supplement metadata to skills)
 
     struct SupplementEntry {
+        let category: String
         let frequency: Frequency
         let description: String
+        let source: String
     }
 
     static func parseSupplement() -> [String: SupplementEntry] {
@@ -208,183 +241,100 @@ struct SkillSyncer {
         var result: [String: SupplementEntry] = [:]
         for line in content.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("|") || trimmed.hasPrefix("`") else { continue }
+            guard trimmed.hasPrefix("|") else { continue }
             if trimmed.contains("---") { continue }
 
             let cells = trimmed.components(separatedBy: "|")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
-            guard cells.count >= 3 else { continue }
+            guard cells.count >= 4 else { continue }
 
             let name = cells[0].replacingOccurrences(of: "`", with: "").trimmingCharacters(in: .whitespaces)
             guard !name.isEmpty, name != "Skill" else { continue }
 
+            let category = cells[1]
+
             var frequency: Frequency = .low
-            if cells[1] == "高" { frequency = .high }
-            else if cells[1] == "中" { frequency = .medium }
+            if cells[2] == "高" { frequency = .high }
+            else if cells[2] == "中" { frequency = .medium }
 
-            let description = cells[2]
+            let description = cells[3]
+            let source = cells.count >= 5 ? cells[4] : ""
 
-            result[name] = SupplementEntry(frequency: frequency, description: description)
+            result[name] = SupplementEntry(
+                category: category,
+                frequency: frequency,
+                description: description,
+                source: source
+            )
         }
         return result
     }
 
-    // MARK: - Auto-generate Complete Inventory from Scan Results
+    // MARK: - Vault Status
 
-    static func generateInventory(skills: [Skill]) {
-        // Load supplement for frequency/description
-        let supplement = parseSupplement()
-        let inventoryDir = (localRepoPath as NSString).appendingPathComponent("inventory")
-        if !FileManager.default.fileExists(atPath: inventoryDir) {
-            try? FileManager.default.createDirectory(atPath: inventoryDir, withIntermediateDirectories: true)
-        }
-
-        let outputPath = (inventoryDir as NSString).appendingPathComponent("Agent Skill 跨平台对比清单.md")
-
-        // Classify skills by deployment status (NOT by isUniversal flag)
-        // Three agents have it = universal; fewer = exclusive
-        var universal: [Skill] = []
-        var claudeOnly: [Skill] = []
-        var codexOnly: [Skill] = []
-        var hermesOnly: [Skill] = []
-
-        for skill in skills {
-            let agentCount = skill.deployedIn.count
-            if agentCount >= 3 || skill.deployedIn == Set(Agent.allCases) {
-                universal.append(skill)
-            } else if agentCount == 1 {
-                if skill.deployedIn.contains(.claude) { claudeOnly.append(skill) }
-                if skill.deployedIn.contains(.codex) { codexOnly.append(skill) }
-                if skill.deployedIn.contains(.hermes) { hermesOnly.append(skill) }
-            } else {
-                // In 2 agents — still somewhat universal, put in universal
-                universal.append(skill)
-            }
-        }
-
-        // Category display names
-        let categoryNames: [Category: String] = [
-            .planning: "规划 & 设计",
-            .dev: "开发 & 构建",
-            .quality: "代码质量 & 审查",
-            .debug: "调试 & 测试",
-            .project: "项目管理",
-            .web: "网页 & 搜索",
-            .content: "内容 & 文档",
-            .arch: "架构 & 模式",
-            .other: "其他",
-        ]
-        let categoryOrder: [Category] = [.planning, .quality, .debug, .project, .web, .content, .arch, .dev, .other]
-
-        var md = "# Agent Skill 跨平台对比清单\n\n"
-        md += "> 自动生成 — 从三个 Agent 目录扫描，按适配性分类\n\n"
-
-        // Helper to render a skill table
-        func renderTable(_ skills: [Skill], showAgents: Bool) {
-            md += "| Skill | 来源 | 频次 |"
-            if showAgents { md += " 适配 |" }
-            md += " 用途 |\n"
-            md += "|---|---|:---:|"
-            if showAgents { md += "---|" }
-            md += "---|\n"
-            for skill in skills.sorted(by: { $0.name < $1.name }) {
-                let freq = supplement[skill.name]?.frequency ?? skill.frequency
-                let desc = supplement[skill.name]?.description ?? skill.description
-                md += "| `\(skill.name)` | \(skill.source) | \(freq.rawValue) |"
-                if showAgents {
-                    let agents = skill.compatibleWith
-                        .sorted(by: { $0.rawValue < $1.rawValue })
-                        .map { $0.displayName }
-                        .joined(separator: " / ")
-                    md += " \(agents) |"
-                }
-                md += " \(desc) |\n"
-            }
-            md += "\n"
-        }
-
-        // Render by category for universal
-        md += "## 一、通用 Skill\n\n"
-        for cat in categoryOrder {
-            let catSkills = universal.filter { $0.category == cat }
-            if catSkills.isEmpty { continue }
-            let name = categoryNames[cat] ?? cat.rawValue
-            md += "### \(name)\n\n"
-            renderTable(catSkills, showAgents: true)
-        }
-
-        // Agent exclusives
-        if !codexOnly.isEmpty {
-            md += "## 二、Codex 专属\n\n"
-            for cat in categoryOrder {
-                let catSkills = codexOnly.filter { $0.category == cat }
-                if catSkills.isEmpty { continue }
-                let name = categoryNames[cat] ?? cat.rawValue
-                md += "### \(name)\n\n"
-                renderTable(catSkills, showAgents: false)
-            }
-        }
-        if !claudeOnly.isEmpty {
-            md += "## 三、Claude 专属\n\n"
-            for cat in categoryOrder {
-                let catSkills = claudeOnly.filter { $0.category == cat }
-                if catSkills.isEmpty { continue }
-                let name = categoryNames[cat] ?? cat.rawValue
-                md += "### \(name)\n\n"
-                renderTable(catSkills, showAgents: false)
-            }
-        }
-        if !hermesOnly.isEmpty {
-            md += "## 四、Hermes 专属\n\n"
-            for cat in categoryOrder {
-                let catSkills = hermesOnly.filter { $0.category == cat }
-                if catSkills.isEmpty { continue }
-                let name = categoryNames[cat] ?? cat.rawValue
-                md += "### \(name)\n\n"
-                renderTable(catSkills, showAgents: false)
-            }
-        }
-
-        // Summary
-        md += "---\n\n"
-        md += "| 分类 | 数量 |\n|---|---|\n"
-        md += "| 通用 | \(universal.count) |\n"
-        md += "| Codex 专属 | \(codexOnly.count) |\n"
-        md += "| Claude 专属 | \(claudeOnly.count) |\n"
-        md += "| Hermes 专属 | \(hermesOnly.count) |\n"
-        md += "| **合计** | **\(universal.count + codexOnly.count + claudeOnly.count + hermesOnly.count)** |\n"
-
-        try? md.write(toFile: outputPath, atomically: true, encoding: .utf8)
+    struct VaultStatus {
+        let isCloned: Bool
+        let skillCount: Int
+        let lastCommit: String?
     }
 
-    // MARK: - Install from Vault to Agent
-
-    static func installFromVault(skillName: String, to agent: Agent) throws {
-        let sourceFile = (localRepoPath as NSString)
-            .appendingPathComponent("skills")
-            .appending("/\(skillName)/SKILL.md")
-
-        guard FileManager.default.fileExists(atPath: sourceFile) else {
-            throw DeployError.notLocalSkill
+    static func vaultStatus() -> VaultStatus {
+        let gitDir = (localRepoPath as NSString).appendingPathComponent(".git")
+        guard FileManager.default.fileExists(atPath: gitDir) else {
+            return VaultStatus(isCloned: false, skillCount: 0, lastCommit: nil)
         }
 
-        let targetDir = agent.skillsDirectory.appendingPathComponent(skillName)
-        let targetFile = targetDir.appendingPathComponent("SKILL.md")
+        let skillsDir = (localRepoPath as NSString).appendingPathComponent("skills")
+        let count = (try? FileManager.default.contentsOfDirectory(atPath: skillsDir))?.count ?? 0
 
-        // Create target directory
-        if !FileManager.default.fileExists(atPath: targetDir.path) {
-            try FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
-        }
+        let lastCommit = runGit(args: ["log", "-1", "--format=%h %s"], cwd: localRepoPath).stdout
 
-        // Copy SKILL.md
-        if FileManager.default.fileExists(atPath: targetFile.path) {
-            try FileManager.default.removeItem(at: targetFile)
-        }
-        try FileManager.default.copyItem(
-            at: URL(fileURLWithPath: sourceFile),
-            to: targetFile
+        return VaultStatus(
+            isCloned: true,
+            skillCount: count,
+            lastCommit: lastCommit.isEmpty ? nil : lastCommit
         )
+    }
+
+    // MARK: - Git Operations
+
+    @discardableResult
+    static func clone() throws -> String {
+        let parent = (localRepoPath as NSString).deletingLastPathComponent
+        if !FileManager.default.fileExists(atPath: parent) {
+            try FileManager.default.createDirectory(atPath: parent, withIntermediateDirectories: true)
+        }
+        let result = runProcess("/usr/bin/git", args: ["clone", repoURL, localRepoPath])
+        guard result.success else { throw SyncError.cloneFailed(result.stderr) }
+        return "克隆成功"
+    }
+
+    @discardableResult
+    static func pull() throws -> String {
+        if !FileManager.default.fileExists(atPath: (localRepoPath as NSString).appendingPathComponent(".git")) {
+            try clone()
+            return "首次克隆完成"
+        }
+        let result = runGit(args: ["pull", "--rebase"], cwd: localRepoPath)
+        guard result.success else { throw SyncError.pullFailed(result.stderr) }
+        return result.stdout.isEmpty ? "已是最新" : result.stdout
+    }
+
+    @discardableResult
+    static func push(message: String = "sync: 更新 Skill") throws -> String {
+        let addResult = runGit(args: ["add", "-A"], cwd: localRepoPath)
+        guard addResult.success else { throw SyncError.commitFailed(addResult.stderr) }
+
+        let diffResult = runGit(args: ["diff", "--cached", "--quiet"], cwd: localRepoPath)
+        if diffResult.success { return "没有需要推送的变更" }
+
+        let commitResult = runGit(args: ["commit", "-m", message], cwd: localRepoPath)
+        guard commitResult.success else { throw SyncError.commitFailed(commitResult.stderr) }
+
+        let pushResult = runGit(args: ["push"], cwd: localRepoPath)
+        guard pushResult.success else { throw SyncError.pushFailed(pushResult.stderr) }
+        return "推送成功"
     }
 
     // MARK: - Helpers
@@ -399,9 +349,7 @@ struct SkillSyncer {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = args
-        if let cwd = cwd {
-            process.currentDirectoryURL = URL(fileURLWithPath: cwd)
-        }
+        if let cwd = cwd { process.currentDirectoryURL = URL(fileURLWithPath: cwd) }
 
         let outPipe = Pipe()
         let errPipe = Pipe()

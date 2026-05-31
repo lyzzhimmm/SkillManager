@@ -5,11 +5,13 @@ struct SidebarView: View {
     let skillCounts: [Category: Int]
     let totalCount: Int
     let onReload: () -> Void
-    var syncStatus: SkillSyncer.SyncStatus?
-    var isSyncing: Bool = false
-    var onSyncPull: (() -> Void)?
-    var onCollect: (() -> Void)?
+    var vaultStatus: SkillSyncer.VaultStatus?
+    var isProcessing: Bool = false
+    var onPull: (() -> Void)?
     var onPush: (() -> Void)?
+    var onCollect: (() -> Void)?
+    var onGenerate: (() -> Void)?
+    var onMatch: (() -> Void)?
 
     // Sidebar is always dark-themed
     private let bg = Color(hex: 0x1A1A1E)
@@ -83,12 +85,12 @@ struct SidebarView: View {
 
             divider
 
-            // Sync section
+            // 云同步
             sectionTitle("云同步")
             VStack(alignment: .leading, spacing: 6) {
-                if let status = syncStatus {
+                if let status = vaultStatus {
                     if !status.isCloned {
-                        Button("初始化仓库") { onSyncPull?() }
+                        Button("初始化仓库") { onPull?() }
                             .sidebarButton()
                     } else {
                         HStack(spacing: 6) {
@@ -98,27 +100,34 @@ struct SidebarView: View {
                                 .foregroundColor(textDim)
                                 .lineLimit(1)
                         }
-                        Text("\(status.skillCount) 个通用 Skill")
+                        Text("\(status.skillCount) 个 Skill 在仓库")
                             .font(.system(size: 10))
                             .foregroundColor(textMuted)
 
-                        HStack(spacing: 6) {
-                            Button(isSyncing ? "同步中..." : "拉取") { onSyncPull?() }
+                        HStack(spacing: 4) {
+                            Button(isProcessing ? "..." : "拉取") { onPull?() }
                                 .sidebarButton()
-                                .disabled(isSyncing)
-                            Button("↓ 收集") { onCollect?() }
+                                .disabled(isProcessing)
+                            Button("推送") { onPush?() }
                                 .sidebarButton()
-                                .disabled(isSyncing)
-                            Button("↑ 推送") { onPush?() }
+                                .disabled(isProcessing)
+                        }
+                        HStack(spacing: 4) {
+                            Button(isProcessing ? "..." : "↓ 收集") { onCollect?() }
                                 .sidebarButton()
-                                .disabled(isSyncing)
+                                .disabled(isProcessing)
+                            Button(isProcessing ? "..." : "📋 生成") { onGenerate?() }
+                                .sidebarButton()
+                                .disabled(isProcessing)
+                            Button(isProcessing ? "..." : "🔄 匹配") { onMatch?() }
+                                .sidebarButton()
+                                .disabled(isProcessing)
                         }
                     }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
-
         }
         .frame(width: 220)
         .background(bg)

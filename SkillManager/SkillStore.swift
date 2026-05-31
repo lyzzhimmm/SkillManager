@@ -4,8 +4,8 @@ import SwiftUI
 class SkillStore: ObservableObject {
     @Published var skills: [Skill] = []
     @Published var lastError: String?
-    @Published var syncStatus: SkillSyncer.SyncStatus?
-    @Published var isSyncing = false
+    @Published var vaultStatus: SkillSyncer.VaultStatus?
+    @Published var isProcessing = false
 
     var categoryCounts: [Category: Int] {
         var counts: [Category: Int] = [:]
@@ -21,110 +21,100 @@ class SkillStore: ObservableObject {
 
     // MARK: - Load
 
-    func load(inventoryPath: String? = nil) {
-        skills = SkillScanner.scanAll(inventoryPath: inventoryPath)
-        refreshSyncStatus()
+    func load() {
+        skills = SkillScanner.scanAll()
+        refreshVaultStatus()
     }
 
-    // MARK: - Sync
-
-    func refreshSyncStatus() {
-        syncStatus = SkillSyncer.status()
+    func refreshVaultStatus() {
+        vaultStatus = SkillSyncer.vaultStatus()
     }
 
-    func syncPull() {
-        isSyncing = true
+    // MARK: - Step 1: Collect
+
+    func collect() {
+        isProcessing = true
+        lastError = "收集中..."
+        DispatchQueue.global(qos: .userInitiated).async {
+            let copied = SkillSyncer.collectToVault()
+            DispatchQueue.main.async {
+                self.isProcessing = false
+                self.refreshVaultStatus()
+                self.lastError = copied > 0 ? "已收集 \(copied) 个 Skill 到仓库" : "没有新 Skill 需要收集"
+            }
+        }
+    }
+
+    // MARK: - Step 2: Generate Inventory
+
+    func generate() {
+        isProcessing = true
+        lastError = "生成清单中..."
+        DispatchQueue.global(qos: .userInitiated).async {
+            SkillSyncer.generateInventory()
+            DispatchQueue.main.async {
+                self.isProcessing = false
+                self.lastError = "清单已生成"
+            }
+        }
+    }
+
+    // MARK: - Step 3: Match
+
+    func match() {
+        isProcessing = true
+        lastError = "匹配中..."
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Re-load skills from vault + apply supplement metadata
+            DispatchQueue.main.async {
+                self.load()
+                self.isProcessing = false
+                self.lastError = "匹配完成，已刷新列表"
+            }
+        }
+    }
+
+    // MARK: - Pull
+
+    func pull() {
+        isProcessing = true
+        lastError = "拉取中..."
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 _ = try SkillSyncer.pull()
                 DispatchQueue.main.async {
-                    self.isSyncing = false
-                    self.refreshSyncStatus()
+                    self.isProcessing = false
+                    self.load()
+                    self.lastError = "拉取成功"
                 }
             } catch {
                 DispatchQueue.main.async {
+                    self.isProcessing = false
                     self.lastError = error.localizedDescription
-                    self.isSyncing = false
                 }
             }
         }
     }
 
-    func syncPush() {
-        isSyncing = true
+    // MARK: - Push
+
+    func push() {
+        isProcessing = true
+        lastError = "推送中..."
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 _ = try SkillSyncer.push()
                 DispatchQueue.main.async {
-                    self.isSyncing = false
-                    self.refreshSyncStatus()
+                    self.isProcessing = false
+                    self.refreshVaultStatus()
+                    self.lastError = "推送成功"
                 }
             } catch {
                 DispatchQueue.main.async {
+                    self.isProcessing = false
                     self.lastError = error.localizedDescription
-                    self.isSyncing = false
                 }
             }
-        }
-    }
-
-    func collectAndPush() {
-        isSyncing = true
-        DispatchQueue.global(qos: .userInitiated).async {
-            let copied = SkillSyncer.collectToVault(skills: self.skills)
-            do {
-                _ = try SkillSyncer.push(message: "sync: 收集 \(copied) 个通用 Skill")
-                DispatchQueue.main.async {
-                    self.isSyncing = false
-                    self.refreshSyncStatus()
-                    self.lastError = copied > 0 ? nil : "没有新 Skill 需要推送"
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.lastError = error.localizedDescription
-                    self.isSyncing = false
-                }
-            }
-        }
-    }
-
-    func collect() {
-        isSyncing = true
-        DispatchQueue.global(qos: .userInitiated).async {
-            let copied = SkillSyncer.collectToVault(skills: self.skills)
-            // Generate inventory first, then re-load to apply supplement data
-            DispatchQueue.main.async {
-                self.load()
-                self.isSyncing = false
-                self.lastError = copied > 0 ? "已收集 \(copied) 个 Skill" : "没有新 Skill 需要收集"
-            }
-        }
-    }
-
-    func pushOnly() {
-        isSyncing = true
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                _ = try SkillSyncer.push()
-                DispatchQueue.main.async {
-                    self.isSyncing = false
-                    self.refreshSyncStatus()
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.lastError = error.localizedDescription
-                    self.isSyncing = false
-                }
-            }
-        }
-    }
-
-    func installFromVault(skillName: String, to agent: Agent) {
-        do {
-            try SkillSyncer.installFromVault(skillName: skillName, to: agent)
-            load()
-        } catch {
-            lastError = error.localizedDescription
         }
     }
 
