@@ -8,6 +8,7 @@ struct InventoryParser {
         let isUniversal: Bool
         let description: String
         let migration: MigrationStatus
+        let compatibleWith: Set<Agent>
     }
 
     struct AgentInventoryEntry {
@@ -50,6 +51,7 @@ struct InventoryParser {
         var source: String = ""
         var migration: MigrationStatus = .portable
         var description: String = ""
+        var compatibleWith: Set<Agent> = Set(Agent.allCases)
     }
 
     static func parseCells(_ cells: [String]) -> ParsedCells {
@@ -73,6 +75,23 @@ struct InventoryParser {
             if c == "gstack" || c.contains("gstack") { result.source = "gstack"; continue }
             if c == "Codex" || c.hasPrefix("Codex（") { result.source = "Codex"; continue }
             if c.hasPrefix("Hermes（") || c == "Hermes 内置" || c.contains("hermes") { result.source = "Hermes"; continue }
+
+            // Compatible agents (from "当前所在" column)
+            if c.contains("Claude") && c.contains("Codex") && c.contains("Hermes") {
+                result.compatibleWith = Set(Agent.allCases)
+            } else if c.contains("Claude") && c.contains("Codex") {
+                result.compatibleWith = [.claude, .codex]
+            } else if c.contains("Claude") && c.contains("Hermes") {
+                result.compatibleWith = [.claude, .hermes]
+            } else if c.contains("Codex") && c.contains("Hermes") {
+                result.compatibleWith = [.codex, .hermes]
+            } else if c.contains("Claude") {
+                result.compatibleWith = [.claude]
+            } else if c.contains("Codex") {
+                result.compatibleWith = [.codex]
+            } else if c.contains("Hermes") {
+                result.compatibleWith = [.hermes]
+            }
 
             // Migration markers in cells (fallback, section heading takes priority)
             if c.contains("可迁移") && !c.contains("不") { result.migration = .portable; continue }
@@ -175,7 +194,8 @@ struct InventoryParser {
                 source: parsed.source,
                 isUniversal: universalNames.contains(name),
                 description: parsed.description,
-                migration: migration
+                migration: migration,
+                compatibleWith: parsed.compatibleWith
             )
         }
 

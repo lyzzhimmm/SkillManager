@@ -129,6 +129,7 @@ struct SkillScanner {
         let source = meta?.source ?? ""
         let isUniversal = meta?.isUniversal ?? false
         let migration = meta?.migration ?? .portable
+        let compatibleWith = meta?.compatibleWith ?? Set(Agent.allCases)
 
         let inventoryDesc = meta?.description.trimmingCharacters(in: .whitespaces) ?? ""
         let finalDesc = inventoryDesc.isEmpty ? parsedDesc : inventoryDesc
@@ -146,7 +147,8 @@ struct SkillScanner {
             migration: migration,
             originAgent: agents.first,
             deployedIn: agents,
-            isLocal: true
+            isLocal: true,
+            compatibleWith: compatibleWith
         )
     }
 

@@ -152,6 +152,7 @@ struct Skill: Identifiable, Hashable {
     var originAgent: Agent?
     var deployedIn: Set<Agent>
     var isLocal: Bool  // true = has local directory, false = inventory only
+    var compatibleWith: Set<Agent>  // which agents this skill works with (from inventory)
 }
 
 // MARK: - Remote Host
@@ -188,7 +189,8 @@ enum DeployError: LocalizedError {
 struct FilterState {
     var selectedCategory: Category = .all
     var selectedFrequencies: Set<Frequency> = Set(Frequency.allCases)
-    var selectedAgents: Set<Agent> = Set(Agent.allCases)
+    var selectedCompatibleAgents: Set<Agent> = Set(Agent.allCases)
+    var selectedInstalledAgents: Set<Agent> = Set(Agent.allCases)
     var onlyUniversal: Bool = false
     var searchText: String = ""
 
@@ -202,8 +204,17 @@ struct FilterState {
         if !selectedFrequencies.contains(skill.frequency) {
             return false
         }
-        if !selectedAgents.isEmpty && !skill.deployedIn.isEmpty && skill.deployedIn.isDisjoint(with: selectedAgents) {
+        // Agent 适配: skill must be compatible with at least one selected agent
+        if !selectedCompatibleAgents.isEmpty && skill.compatibleWith.isDisjoint(with: selectedCompatibleAgents) {
             return false
+        }
+        // Agent 已安装: if filter is active, skill must be installed in at least one selected agent
+        if !selectedInstalledAgents.isEmpty {
+            let installed = skill.deployedIn.intersection(selectedInstalledAgents)
+            // Show skill if: no installed agents selected OR skill has installed agents OR skill has no deployment (vault only)
+            if installed.isEmpty && !skill.deployedIn.isEmpty {
+                return false
+            }
         }
         if !searchText.isEmpty {
             let q = searchText.lowercased()

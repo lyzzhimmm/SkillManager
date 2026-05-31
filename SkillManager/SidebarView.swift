@@ -82,11 +82,22 @@ struct SidebarView: View {
 
             divider
 
-            // Agent
-            sectionTitle("Agent")
+            // Agent 适配
+            sectionTitle("Agent 适配")
             HStack(spacing: 5) {
                 ForEach(Agent.allCases) { agent in
-                    agentChip(agent)
+                    compatibleAgentChip(agent)
+                }
+            }
+            .padding(.horizontal, 16)
+
+            divider
+
+            // Agent 已安装
+            sectionTitle("Agent 已安装")
+            HStack(spacing: 5) {
+                ForEach(Agent.allCases) { agent in
+                    installedAgentChip(agent)
                 }
             }
             .padding(.horizontal, 16)
@@ -235,8 +246,8 @@ struct SidebarView: View {
             }
     }
 
-    private func agentChip(_ agent: Agent) -> some View {
-        let isOn = filter.selectedAgents.contains(agent)
+    private func compatibleAgentChip(_ agent: Agent) -> some View {
+        let isOn = filter.selectedCompatibleAgents.contains(agent)
         let color = agent.color
         return Text(agent.displayName.components(separatedBy: " ").first ?? agent.displayName)
             .font(.system(size: 11))
@@ -250,8 +261,28 @@ struct SidebarView: View {
             )
             .cornerRadius(12)
             .onTapGesture {
-                if isOn { filter.selectedAgents.remove(agent) }
-                else { filter.selectedAgents.insert(agent) }
+                if isOn { filter.selectedCompatibleAgents.remove(agent) }
+                else { filter.selectedCompatibleAgents.insert(agent) }
+            }
+    }
+
+    private func installedAgentChip(_ agent: Agent) -> some View {
+        let isOn = filter.selectedInstalledAgents.contains(agent)
+        let color = agent.color
+        return Text(agent.displayName.components(separatedBy: " ").first ?? agent.displayName)
+            .font(.system(size: 11))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 3)
+            .background(isOn ? color.opacity(0.2) : Color.clear)
+            .foregroundColor(isOn ? color : textDim)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isOn ? color : Color.white.opacity(0.1), lineWidth: 1)
+            )
+            .cornerRadius(12)
+            .onTapGesture {
+                if isOn { filter.selectedInstalledAgents.remove(agent) }
+                else { filter.selectedInstalledAgents.insert(agent) }
             }
     }
 
