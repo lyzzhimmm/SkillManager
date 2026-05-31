@@ -2,207 +2,182 @@ import Foundation
 
 struct SkillScanner {
 
-    static func scanAll(inventoryPath: String? = nil) -> [Skill] {
-        // 1. Parse supplement for frequency/description (metadata only, not universal classification)
+    static func scanAll() -> [Skill] {
+        // 1. Read generated inventory (source of truth for skill list)
+        let inventoryPath = SkillSyncer.localRepoPath + "/inventory/Agent Skill 跨平台对比清单.md"
+        let inventorySkills = parseInventory(at: inventoryPath)
+
+        // 2. Scan local agent directories for installed status
+        let installedIn = scanInstalled()
+
+        // 3. Read supplement for extra metadata
         let supplement = SkillSyncer.parseSupplement()
 
-        // 2. Scan local directories — track which agents each skill is in
-        var localSkills: [String: (dirs: [URL], agents: Set<Agent>)] = [:]
+        // 4. Merge: inventory skills + installed status + supplement metadata
+        var result: [Skill] = []
+        for inv in inventorySkills {
+            let sup = supplement[inv.name]
+            let installed = installedIn[inv.name] ?? []
 
-        // ~/.agents/skills/ → shared, deployed to ALL agents
-        let sharedDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".agents/skills")
-        scanDirectory(sharedDir, into: &localSkills, agents: Set(Agent.allCases))
-
-        // Each agent's main directory
-        for agent in Agent.allCases {
-            scanDirectory(agent.skillsDirectory, into: &localSkills, agents: [agent])
+            let skill = Skill(
+                id: inv.name,
+                name: inv.name,
+                description: sup?.description ?? inv.description,
+                category: Category.classify(name: inv.name, description: sup?.description ?? inv.description, supplementCategory: sup?.category ?? ""),
+                filePath: URL(fileURLWithPath: "/dev/null"),
+                hasReferences: false,
+                frequency: sup?.frequency ?? inv.frequency,
+                source: sup?.source ?? inv.source,
+                isUniversal: inv.isUniversal,
+                migration: inv.migration,
+                originAgent: nil,
+                deployedIn: installed,
+                isLocal: !installed.isEmpty,
+                compatibleWith: inv.compatibleWith
+            )
+            result.append(skill)
         }
 
-        // ~/.skill-vault/skills/ → universal source
-        let vaultDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".skill-vault/skills")
-        scanDirectory(vaultDir, into: &localSkills, agents: Set(Agent.allCases))
-
-        // 3. Merge and classify
-        var skillMap: [String: Skill] = [:]
-
-        for (name, info) in localSkills {
-            guard let skill = parseLocalSkill(name: name, dirs: info.dirs, agents: info.agents, supplement: supplement) else {
-                continue
-            }
-
-            let key = skill.name
-            if var existing = skillMap[key] {
-                // Merge: combine deployedIn
-                existing.deployedIn.formUnion(skill.deployedIn)
-                existing.compatibleWith.formUnion(skill.compatibleWith)
-                skillMap[key] = existing
-            } else {
-                skillMap[key] = skill
-            }
-        }
-
-        // 4. Classify universal AFTER merge
-        //    universal = in all 3 agents OR in shared/vault directory
-        for (key, skill) in skillMap {
-            var updated = skill
-            let inAllAgents = updated.deployedIn == Set(Agent.allCases)
-            let inSharedOrVault = updated.deployedIn.contains(.claude) &&
-                                  updated.deployedIn.contains(.codex) &&
-                                  updated.deployedIn.contains(.hermes)
-
-            if inAllAgents || inSharedOrVault {
-                updated.isUniversal = true
-                updated.compatibleWith = Set(Agent.allCases)
-            }
-            skillMap[key] = updated
-        }
-
-        // 5. Sort: frequency high→medium→low, then alphabetically
-        return skillMap.values.sorted { a, b in
-            if a.frequency != b.frequency { return a.frequency < b.frequency }
-            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
-        }
+        return result
     }
 
-    private static func parseLocalSkill(
-        name: String,
-        dirs: [URL],
-        agents: Set<Agent>,
-        supplement: [String: SkillSyncer.SupplementEntry] = [:]
-    ) -> Skill? {
-        let skillMd = dirs[0].appendingPathComponent("SKILL.md")
-        guard let content = try? String(contentsOf: skillMd, encoding: .utf8) else { return nil }
+    // MARK: - Parse Generated Inventory
 
-        var parsedName = name
-        var parsedDesc = ""
-        var parsedTags: [String] = []
+    struct InventorySkill {
+        let name: String
+        let isUniversal: Bool
+        let compatibleWith: Set<Agent>
+        let frequency: Frequency
+        let source: String
+        let description: String
+        let migration: MigrationStatus
+    }
 
-        // Parse YAML frontmatter
-        if let start = content.range(of: "---\n"),
-           let end = content.range(of: "\n---", range: start.upperBound..<content.endIndex) {
-            let frontmatter = String(content[start.upperBound..<end.lowerBound])
-            var inDescription = false
-            var descLines: [String] = []
-            var inTags = false
-            for line in frontmatter.components(separatedBy: "\n") {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                if trimmed.hasPrefix("name:") {
-                    parsedName = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
-                        .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-                    inDescription = false
-                    inTags = false
-                } else if trimmed.hasPrefix("description:") {
-                    let value = trimmed.dropFirst(12).trimmingCharacters(in: .whitespaces)
-                        .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-                    if !value.isEmpty {
-                        parsedDesc = value
-                        inDescription = false
-                    } else {
-                        inDescription = true
-                    }
-                    inTags = false
-                } else if trimmed.hasPrefix("tags:") {
-                    inDescription = false
-                    inTags = true
-                    let value = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
-                    if value.hasPrefix("[") {
-                        let tagsStr = value.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
-                        parsedTags = tagsStr.components(separatedBy: ",")
-                            .map { $0.trimmingCharacters(in: .whitespaces) }
-                            .filter { !$0.isEmpty && !$0.hasPrefix("<") }
-                    }
-                } else if inDescription && !trimmed.isEmpty && (trimmed.hasPrefix(" ") || trimmed.hasPrefix("\t")) {
-                    descLines.append(String(trimmed).trimmingCharacters(in: .whitespaces))
-                } else if inTags && trimmed.hasPrefix("- ") {
-                    let tag = String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces)
-                    if !tag.isEmpty && !tag.hasPrefix("<") {
-                        parsedTags.append(tag)
-                    }
-                } else {
-                    inDescription = false
-                    inTags = false
-                }
-            }
-            if !descLines.isEmpty {
-                parsedDesc = descLines.joined(separator: " ")
-            }
+    static func parseInventory(at path: String) -> [InventorySkill] {
+        guard let content = try? String(contentsOfFile: path, encoding: .utf8) else {
+            return []
         }
 
-        // Fallback description
-        if parsedDesc.isEmpty {
-            let lines = content.components(separatedBy: "\n")
-            var passedFirstSeparator = false
-            var passedSecondSeparator = false
-            for line in lines {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                if trimmed == "---" {
-                    if !passedFirstSeparator { passedFirstSeparator = true }
-                    else if !passedSecondSeparator { passedSecondSeparator = true }
-                    continue
-                }
-                if passedSecondSeparator && !trimmed.isEmpty && !trimmed.hasPrefix("#") {
-                    parsedDesc = trimmed
+        var result: [InventorySkill] = []
+        var inUniversalSection = false
+        var inCodexSection = false
+        var inClaudeSection = false
+        var inHermesSection = false
+
+        for line in content.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            // Detect sections
+            if trimmed.contains("一、通用") { inUniversalSection = true; inCodexSection = false; inClaudeSection = false; inHermesSection = false; continue }
+            if trimmed.contains("二、Codex") { inUniversalSection = false; inCodexSection = true; inClaudeSection = false; inHermesSection = false; continue }
+            if trimmed.contains("三、Claude") { inUniversalSection = false; inCodexSection = false; inClaudeSection = true; inHermesSection = false; continue }
+            if trimmed.contains("四、Hermes") { inUniversalSection = false; inCodexSection = false; inClaudeSection = false; inHermesSection = true; continue }
+
+            // Skip non-table lines
+            guard trimmed.hasPrefix("|") else { continue }
+            if trimmed.contains("---") { continue }
+            if trimmed.contains("Skill") && trimmed.contains("来源") { continue } // header row
+            if trimmed.contains("Skill") && trimmed.contains("频次") { continue } // header row
+            if trimmed.contains("分类") && trimmed.contains("数量") { continue } // summary table
+
+            let cells = trimmed.components(separatedBy: "|")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            guard cells.count >= 2 else { continue }
+
+            let name = cells[0].replacingOccurrences(of: "`", with: "").trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty, name != "Skill", name.count < 80 else { continue }
+
+            // Parse compatible agents from "当前所在" column (for universal skills)
+            var compatibleWith: Set<Agent> = []
+            if inUniversalSection && cells.count >= 3 {
+                let location = cells[2]
+                if location.contains("Claude") { compatibleWith.insert(.claude) }
+                if location.contains("Codex") { compatibleWith.insert(.codex) }
+                if location.contains("Hermes") { compatibleWith.insert(.hermes) }
+                if compatibleWith.isEmpty { compatibleWith = Set(Agent.allCases) }
+            } else if inCodexSection {
+                compatibleWith = [.codex]
+            } else if inClaudeSection {
+                compatibleWith = [.claude]
+            } else if inHermesSection {
+                compatibleWith = [.hermes]
+            }
+
+            // Parse frequency
+            var frequency: Frequency = .low
+            for c in cells {
+                if c == "高" { frequency = .high }
+                else if c == "中" { frequency = .medium }
+            }
+
+            // Parse source (for universal skills)
+            var source = ""
+            if inUniversalSection && cells.count >= 2 {
+                source = cells[1]
+            }
+
+            // Parse description (last meaningful cell)
+            var description = ""
+            for c in cells.reversed() {
+                if c.count > 2 && c != "高" && c != "中" && c != "低" && !c.contains("✅") && !c.contains("❌") {
+                    description = c
                     break
                 }
             }
+
+            // Migration status
+            let migration: MigrationStatus
+            if inUniversalSection { migration = .portable }
+            else if inCodexSection { migration = .exclusive(.codex) }
+            else if inClaudeSection { migration = .exclusive(.claude) }
+            else if inHermesSection { migration = .exclusive(.hermes) }
+            else { migration = .portable }
+
+            result.append(InventorySkill(
+                name: name,
+                isUniversal: inUniversalSection,
+                compatibleWith: compatibleWith,
+                frequency: frequency,
+                source: source,
+                description: description,
+                migration: migration
+            ))
         }
 
-        let hasRefs = FileManager.default.fileExists(
-            atPath: dirs[0].appendingPathComponent("references").path
-        )
-
-        // Metadata from supplement only (not from inventory for classification)
-        let sup = supplement[parsedName] ?? supplement[name]
-        let category = Category.classify(name: parsedName, description: parsedDesc, tags: parsedTags, supplementCategory: sup?.category ?? "")
-        let frequency = sup?.frequency ?? .low
-        let source = sup?.source ?? ""
-        let description = sup?.description ?? parsedDesc
-
-        // compatibleWith = which agents this skill is actually installed in
-        let compatibleWith = agents
-
-        return Skill(
-            id: name,
-            name: parsedName,
-            description: description,
-            category: category,
-            filePath: skillMd,
-            hasReferences: hasRefs,
-            frequency: frequency,
-            source: source,
-            isUniversal: false,  // Will be set after merge
-            migration: .portable,
-            originAgent: agents.first,
-            deployedIn: agents,
-            isLocal: true,
-            compatibleWith: compatibleWith
-        )
+        return result
     }
 
-    private static func scanDirectory(
-        _ dir: URL,
-        into localSkills: inout [String: (dirs: [URL], agents: Set<Agent>)],
-        agents: Set<Agent>
-    ) {
-        guard let contents = try? FileManager.default.contentsOfDirectory(
-            at: dir, includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return }
+    // MARK: - Scan Installed Skills
 
-        for item in contents {
-            var isDir: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir),
-                  isDir.boolValue else { continue }
-            let skillMd = item.appendingPathComponent("SKILL.md")
-            guard FileManager.default.fileExists(atPath: skillMd.path) else { continue }
+    static func scanInstalled() -> [String: Set<Agent>] {
+        var result: [String: Set<Agent>] = [:]
+        let home = FileManager.default.homeDirectoryForCurrentUser
 
-            let name = item.lastPathComponent
-            if localSkills[name] != nil {
-                localSkills[name]!.dirs.append(item)
-                localSkills[name]!.agents.formUnion(agents)
-            } else {
-                localSkills[name] = ([item], agents)
+        let dirs: [(Agent, URL)] = [
+            (.claude, home.appendingPathComponent(".claude/skills")),
+            (.codex, home.appendingPathComponent(".codex/skills")),
+            (.hermes, home.appendingPathComponent(".hermes/skills")),
+        ]
+
+        for (agent, dir) in dirs {
+            guard let contents = try? FileManager.default.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+
+            for item in contents {
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir),
+                      isDir.boolValue else { continue }
+                let skillMd = item.appendingPathComponent("SKILL.md")
+                guard FileManager.default.fileExists(atPath: skillMd.path) else { continue }
+
+                let name = item.lastPathComponent
+                result[name, default: Set<Agent>()].insert(agent)
             }
         }
+
+        return result
     }
 }

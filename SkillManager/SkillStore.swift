@@ -7,6 +7,17 @@ class SkillStore: ObservableObject {
     @Published var vaultStatus: SkillSyncer.VaultStatus?
     @Published var isProcessing = false
 
+    // Installed counts (from local agent directories)
+    var installedCounts: [Agent: Int] {
+        var counts: [Agent: Int] = [:]
+        for skill in skills {
+            for agent in skill.deployedIn {
+                counts[agent, default: 0] += 1
+            }
+        }
+        return counts
+    }
+
     var categoryCounts: [Category: Int] {
         var counts: [Category: Int] = [:]
         for skill in skills {
@@ -16,7 +27,7 @@ class SkillStore: ObservableObject {
     }
 
     func countForAgent(_ agent: Agent) -> Int {
-        skills.filter { $0.deployedIn.contains(agent) }.count
+        installedCounts[agent] ?? 0
     }
 
     // MARK: - Load
@@ -65,7 +76,6 @@ class SkillStore: ObservableObject {
         isProcessing = true
         lastError = "匹配中..."
         DispatchQueue.global(qos: .userInitiated).async {
-            // Re-load skills from vault + apply supplement metadata
             DispatchQueue.main.async {
                 self.load()
                 self.isProcessing = false
