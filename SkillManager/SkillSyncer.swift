@@ -150,11 +150,13 @@ struct SkillSyncer {
         }
 
         var copied = 0
+        var universalNames = Set<String>()
         for skill in skills {
-            // Only collect universal/portable skills that are local
-            guard skill.isUniversal || skill.migration.canDirectDeploy else { continue }
+            // Only collect skills marked as universal in the inventory
+            guard skill.isUniversal else { continue }
             guard skill.isLocal else { continue }
 
+            universalNames.insert(skill.name)
             let sourceDir = skill.filePath.deletingLastPathComponent()
             let targetDir = URL(fileURLWithPath: vaultSkillsDir).appendingPathComponent(skill.name)
 
@@ -168,6 +170,17 @@ struct SkillSyncer {
                 copied += 1
             } catch {
                 // Skip failed copies silently
+            }
+        }
+
+        // Clean up vault entries that are no longer universal
+        if let existing = try? FileManager.default.contentsOfDirectory(atPath: vaultSkillsDir) {
+            for name in existing {
+                if !universalNames.contains(name) {
+                    try? FileManager.default.removeItem(
+                        atPath: (vaultSkillsDir as NSString).appendingPathComponent(name)
+                    )
+                }
             }
         }
 
