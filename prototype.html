@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill Manager — 原型对比</title>
+<style>
+  :root {
+    --claude: #e8751a;
+    --codex-bg: #0066ff;
+    --codex-text: #ffffff;
+    --hermes: #f5c518;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ─── Variant Switcher ─── */
+  .variant-bar {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    z-index: 9999;
+    background: rgba(30,30,30,0.92); backdrop-filter: blur(20px);
+    border-radius: 14px; padding: 6px; display: flex; gap: 4px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  .variant-btn {
+    padding: 8px 18px; border: none; border-radius: 10px;
+    font-size: 12.5px; font-weight: 500; cursor: pointer;
+    transition: all 0.2s; font-family: inherit;
+    color: #999; background: transparent;
+  }
+  .variant-btn:hover { color: #ddd; background: rgba(255,255,255,0.06); }
+  .variant-btn.active { color: #fff; background: rgba(255,255,255,0.12); }
+  .variant-btn .key { display: inline-block; font-size: 10px; opacity: 0.4; margin-right: 5px; font-weight: 600; }
+
+  .variant { display: none; height: 100vh; }
+  .variant.active { display: flex; }
+
+  /* ─── Shared: Agent badges ─── */
+  .agent-badges { display: flex; gap: 4px; flex-shrink: 0; }
+  .agent-badge {
+    width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; cursor: pointer;
+    transition: transform 0.12s, box-shadow 0.12s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    position: relative;
+  }
+  .agent-badge:hover { transform: scale(1.18); }
+  .agent-badge.claude { background: var(--claude); color: #fff; }
+  .agent-badge.codex { background: var(--codex-bg); color: var(--codex-text); }
+  .agent-badge.hermes { background: var(--hermes); color: #1d1d1f; }
+  .agent-badge.off {
+    background: transparent; color: #c1c1c6;
+    border: 1.5px solid #c1c1c6; box-shadow: none;
+  }
+  .agent-badge.off:hover { border-color: #999; color: #999; }
+
+  .freq {
+    font-size: 10.5px; font-weight: 500;
+    padding: 2px 7px; border-radius: 10px;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .freq.high { color: #bf5af2; background: rgba(191,90,242,0.08); }
+  .freq.medium { color: #007aff; background: rgba(0,122,255,0.07); }
+  .freq.low { color: #8e8e93; background: rgba(142,142,147,0.08); }
+
+  .src {
+    font-size: 10.5px; color: #aeaeb2;
+    flex-shrink: 0; width: 48px; text-align: right;
+  }
+
+  /* ─── Deploy Bar (appears on select) ─── */
+  .deploy-bar {
+    display: none;
+    padding: 10px 20px;
+    background: #fff;
+    border-top: 1px solid #e5e5e7;
+    align-items: center;
+    gap: 12px;
+    animation: slideUp 0.2s ease;
+  }
+  .deploy-bar.visible { display: flex; }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .deploy-bar .label {
+    font-size: 12px; color: #86868b; font-weight: 500;
+  }
+
+  .deploy-bar .deploy-targets {
+    display: flex; gap: 8px;
+  }
+
+  .deploy-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 8px;
+    border: 1.5px solid; cursor: pointer;
+    font-size: 12px; font-weight: 500;
+    transition: all 0.15s; font-family: inherit;
+    background: transparent;
+  }
+  .deploy-btn:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .deploy-btn .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .deploy-btn.claude-btn { border-color: var(--claude); color: var(--claude); }
+  .deploy-btn.claude-btn .dot { background: var(--claude); }
+  .deploy-btn.claude-btn.deployed { background: var(--claude); color: #fff; }
+  .deploy-btn.codex-btn { border-color: var(--codex-bg); color: var(--codex-bg); }
+  .deploy-btn.codex-btn .dot { background: var(--codex-bg); }
+  .deploy-btn.codex-btn.deployed { background: var(--codex-bg); color: #fff; }
+  .deploy-btn.hermes-btn { border-color: var(--hermes); color: #8a7000; }
+  .deploy-btn.hermes-btn .dot { background: var(--hermes); }
+  .deploy-btn.hermes-btn.deployed { background: var(--hermes); color: #1d1d1f; }
+
+  .deploy-bar .deploy-hint {
+    font-size: 11px; color: #aeaeb2; margin-left: auto;
+  }
+
+  /* ═══════════════════════════════════════════════
+     VARIANT A: macOS Sidebar
+     ═══════════════════════════════════════════════ */
+  .va { background: #f6f6f6; }
+  .va .sidebar {
+    width: 220px; min-width: 220px; background: #1a1a1e;
+    display: flex; flex-direction: column;
+    border-right: 1px solid #000; user-select: none;
+  }
+  .va .sidebar-header {
+    padding: 20px 16px 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .va .app-icon {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: linear-gradient(135deg, #5e5ce6, #bf5af2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #fff; font-weight: 600;
+  }
+  .va .sidebar h1 { font-size: 13px; font-weight: 600; color: #fff; }
+  .va .sidebar-section { padding: 8px 0; }
+  .va .section-title {
+    padding: 4px 16px 6px; font-size: 10.5px; font-weight: 600; color: #86868b;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .va .nav-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 16px; margin: 0 8px; border-radius: 5px;
+    cursor: pointer; transition: background 0.1s;
+  }
+  .va .nav-item:hover { background: #2a2a2e; }
+  .va .nav-item.active { background: #0a5dc2; }
+  .va .nav-item .label { font-size: 12.5px; color: #b0b0b4; }
+  .va .nav-item.active .label { color: #fff; font-weight: 500; }
+  .va .nav-item .cnt {
+    font-size: 10.5px; color: #86868b;
+    background: rgba(255,255,255,0.08);
+    padding: 1px 6px; border-radius: 10px; min-width: 20px; text-align: center;
+  }
+  .va .nav-item.active .cnt { background: rgba(255,255,255,0.2); color: #fff; }
+  .va .sidebar-divider { height: 1px; background: #2e2e32; margin: 6px 16px; }
+  .va .chips { display: flex; flex-wrap: wrap; gap: 5px; padding: 4px 16px; }
+  .va .chip {
+    font-size: 11px; padding: 3px 9px; border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1); color: #b0b0b4;
+    cursor: pointer; transition: all 0.15s; background: transparent;
+  }
+  .va .chip:hover { border-color: rgba(255,255,255,0.2); }
+  .va .chip.on { border-color: #007aff; background: rgba(0,122,255,0.15); color: #64d2ff; }
+  .va .chip.claude-chip { border-color: var(--claude); color: var(--claude); }
+  .va .chip.claude-chip.on { background: rgba(232,117,26,0.2); color: #f5a623; }
+  .va .chip.codex-chip { border-color: var(--codex-bg); color: #4d9eff; }
+  .va .chip.codex-chip.on { background: rgba(0,102,255,0.2); color: #80b8ff; }
+  .va .chip.hermes-chip { border-color: var(--hermes); color: var(--hermes); }
+  .va .chip.hermes-chip.on { background: rgba(245,197,24,0.2); color: #f5d84d; }
+
+  .va .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .va .search-bar {
+    padding: 14px 20px 10px; background: #fff;
+    border-bottom: 1px solid #e5e5e7;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .va .search-wrap { flex: 1; position: relative; max-width: 420px; }
+  .va .search-wrap .icon {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: #aeaeb2; font-size: 13px; pointer-events: none;
+  }
+  .va .search-input {
+    width: 100%; padding: 7px 10px 7px 30px;
+    border: 1px solid #e5e5e7; border-radius: 8px;
+    background: #ebebed; font-size: 13px; color: #1d1d1f;
+    outline: none; font-family: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .va .search-input::placeholder { color: #aeaeb2; }
+  .va .search-input:focus { border-color: #007aff; box-shadow: 0 0 0 3px rgba(0,122,255,0.12); background: #fff; }
+  .va .search-btn {
+    width: 30px; height: 30px; border-radius: 6px;
+    border: 1px solid #e5e5e7; background: #fff; color: #86868b;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; transition: all 0.1s;
+  }
+  .va .search-btn:hover { background: #ebebed; color: #1d1d1f; }
+
+  .va .list-header {
+    display: flex; align-items: center;
+    padding: 6px 20px; margin: 0 10px;
+    font-size: 10.5px; font-weight: 500; color: #aeaeb2;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    border-bottom: 1px solid #e5e5e7; gap: 12px;
+  }
+  .va .list-header .c1 { flex: 1; }
+  .va .list-header .c2 { width: 72px; text-align: center; }
+  .va .list-header .c3 { width: 44px; text-align: center; }
+  .va .list-header .c4 { width: 48px; text-align: right; }
+
+  .va .skill-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+  .va .skill-list::-webkit-scrollbar { width: 6px; }
+  .va .skill-list::-webkit-scrollbar-track { background: transparent; }
+  .va .skill-list::-webkit-scrollbar-thumb { background: #c1c1c6; border-radius: 3px; }
+
+  .va .skill-row {
+    display: flex; align-items: center;
+    padding: 10px 20px; margin: 0 10px; border-radius: 8px;
+    cursor: default; transition: background 0.1s; gap: 12px;
+  }
+  .va .skill-row:hover { background: rgba(0,0,0,0.03); }
+  .va .skill-row.selected { background: rgba(0,122,255,0.08); }
+  .va .skill-info { flex: 1; min-width: 0; }
+  .va .skill-name { font-size: 13px; font-weight: 600; color: #1d1d1f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .va .skill-desc { font-size: 11.5px; color: #86868b; margin-top: 1.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .va .status-bar {
+    padding: 8px 20px; background: #fff;
+    border-top: 1px solid #e5e5e7;
+    font-size: 11px; color: #86868b;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .va .status-bar .sep { color: #e5e5e7; }
+  .va .status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+
+  /* ═══════════════════════════════════════════════
+     VARIANT B: Dense Table
+     ═══════════════════════════════════════════════ */
+  .vb { background: #f6f6f6; flex-direction: column; }
+  .vb .toolbar {
+    padding: 10px 16px; background: #f6f6f6;
+    border-bottom: 1px solid #d1d1d6;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .vb .toolbar h1 { font-size: 13px; font-weight: 600; color: #1d1d1f; margin-right: 12px; }
+  .vb .toolbar .search-wrap { position: relative; width: 240px; }
+  .vb .toolbar .search-wrap .icon {
+    position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+    color: #aeaeb2; font-size: 12px; pointer-events: none;
+  }
+  .vb .toolbar input {
+    width: 100%; padding: 5px 8px 5px 26px;
+    border: 1px solid #c1c1c6; border-radius: 6px;
+    background: #fff; font-size: 12px; color: #1d1d1f;
+    outline: none; font-family: inherit;
+  }
+  .vb .toolbar input:focus { border-color: #007aff; box-shadow: 0 0 0 3px rgba(0,122,255,0.12); }
+  .vb .toolbar .filter-group { display: flex; gap: 1px; margin-left: 8px; }
+  .vb .toolbar .filter-btn {
+    padding: 4px 10px; border: 1px solid #c1c1c6;
+    background: #fff; font-size: 11px; color: #1d1d1f;
+    cursor: pointer; font-family: inherit;
+  }
+  .vb .toolbar .filter-btn:first-child { border-radius: 5px 0 0 5px; }
+  .vb .toolbar .filter-btn:last-child { border-radius: 0 5px 5px 0; }
+  .vb .toolbar .filter-btn:not(:first-child) { border-left: none; }
+  .vb .toolbar .filter-btn.active { background: #007aff; color: #fff; border-color: #007aff; }
+  .vb .toolbar .agent-filters { display: flex; gap: 4px; margin-left: auto; }
+  .vb .toolbar .af {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid; display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+  }
+  .vb .toolbar .af.on { color: #fff; }
+  .vb .toolbar .af.claude { border-color: var(--claude); color: var(--claude); }
+  .vb .toolbar .af.claude.on { background: var(--claude); }
+  .vb .toolbar .af.codex { border-color: var(--codex-bg); color: var(--codex-bg); }
+  .vb .toolbar .af.codex.on { background: var(--codex-bg); }
+  .vb .toolbar .af.hermes { border-color: #c9a800; color: #c9a800; }
+  .vb .toolbar .af.hermes.on { background: var(--hermes); color: #1d1d1f; }
+
+  .vb .table-wrap { flex: 1; overflow: auto; background: #fff; }
+  .vb table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .vb thead th {
+    padding: 6px 12px; text-align: left;
+    font-size: 11px; font-weight: 600; color: #86868b;
+    border-bottom: 1px solid #d1d1d6; background: #f6f6f6;
+    position: sticky; top: 0; z-index: 1; white-space: nowrap; user-select: none;
+  }
+  .vb thead th:not(:first-child) { text-align: center; }
+  .vb thead th:last-child { text-align: right; }
+  .vb tbody tr { cursor: default; transition: background 0.08s; }
+  .vb tbody tr:hover { background: #f0f0f2; }
+  .vb tbody tr.selected { background: #d4e3ff; }
+  .vb tbody tr:not(:last-child) td { border-bottom: 1px solid #f0f0f2; }
+  .vb tbody td { padding: 7px 12px; vertical-align: middle; }
+  .vb tbody td:first-child { font-weight: 600; color: #1d1d1f; }
+  .vb tbody td:nth-child(2) { color: #86868b; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vb tbody td:nth-child(3) { text-align: center; }
+  .vb tbody td:nth-child(4) { text-align: center; }
+  .vb tbody td:last-child { text-align: right; color: #aeaeb2; }
+  .vb .footer {
+    padding: 6px 16px; background: #f6f6f6;
+    border-top: 1px solid #d1d1d6;
+    font-size: 11px; color: #86868b;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .vb .footer .sep { color: #d1d1d6; }
+
+  /* Table header dropdown filter */
+  .vb thead th { position: relative; cursor: pointer; }
+  .vb thead th::after {
+    content: '▾';
+    font-size: 9px;
+    color: #aeaeb2;
+    margin-left: 4px;
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+  .vb thead th:hover::after { opacity: 1; }
+
+  .th-filter {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 100;
+    background: #fff;
+    border: 1px solid #d1d1d6;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    padding: 6px 0;
+    min-width: 160px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  .th-filter.open { display: block; }
+
+  .th-filter-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #1d1d1f;
+    transition: background 0.08s;
+  }
+  .th-filter-item:hover { background: #f0f0f2; }
+
+  .th-filter-item input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #007aff;
+    cursor: pointer;
+  }
+
+  .th-filter-item .count {
+    margin-left: auto;
+    font-size: 10px;
+    color: #aeaeb2;
+  }
+
+  /* ═══════════════════════════════════════════════
+     VARIANT C: Dark Pro
+     ═══════════════════════════════════════════════ */
+  .vc { background: #0d0d0f; flex-direction: column; color: #c8c8cc; }
+  .vc .top-bar {
+    padding: 12px 20px; background: #141416;
+    border-bottom: 1px solid #222226;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .vc .top-bar h1 { font-size: 14px; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
+  .vc .top-bar .search-wrap { flex: 1; position: relative; max-width: 360px; }
+  .vc .top-bar .search-wrap .icon {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: #555; font-size: 13px; pointer-events: none;
+  }
+  .vc .top-bar input {
+    width: 100%; padding: 7px 10px 7px 30px;
+    border: 1px solid #333; border-radius: 6px;
+    background: #1a1a1e; font-size: 12.5px; color: #c8c8cc;
+    outline: none; font-family: inherit;
+  }
+  .vc .top-bar input::placeholder { color: #555; }
+  .vc .top-bar input:focus { border-color: #5e5ce6; box-shadow: 0 0 0 2px rgba(94,92,230,0.2); }
+  .vc .pills { display: flex; gap: 4px; }
+  .vc .pill {
+    padding: 4px 10px; border-radius: 4px;
+    font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.1s;
+    background: #1a1a1e; color: #888; border: 1px solid #333;
+  }
+  .vc .pill:hover { color: #bbb; border-color: #444; }
+  .vc .pill.on { background: #2a2a2e; color: #fff; border-color: #5e5ce6; }
+
+  .vc .content { flex: 1; display: flex; overflow: hidden; }
+  .vc .left-filter {
+    width: 180px; min-width: 180px; background: #111113;
+    border-right: 1px solid #222226; padding: 12px 0; overflow-y: auto;
+  }
+  .vc .filter-group-title {
+    padding: 4px 16px 6px; font-size: 10px; font-weight: 700; color: #555;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .vc .filter-item {
+    padding: 4px 16px; font-size: 12px; color: #777;
+    cursor: pointer; transition: all 0.1s;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .vc .filter-item:hover { color: #bbb; background: #1a1a1e; }
+  .vc .filter-item.active { color: #fff; background: #2a2a2e; }
+  .vc .filter-item .cnt { font-size: 10px; color: #555; font-variant-numeric: tabular-nums; }
+  .vc .filter-item.active .cnt { color: #888; }
+
+  .vc .list-area { flex: 1; overflow-y: auto; padding: 4px 0; }
+  .vc .row {
+    display: flex; align-items: center;
+    padding: 8px 20px; gap: 12px;
+    cursor: default; transition: background 0.08s;
+    border-bottom: 1px solid #1a1a1e;
+  }
+  .vc .row:hover { background: #1a1a1e; }
+  .vc .row.selected { background: #1a1a2e; border-left: 2px solid #5e5ce6; }
+  .vc .row .info { flex: 1; min-width: 0; }
+  .vc .row .name {
+    font-size: 12.5px; font-weight: 600; color: #e0e0e4;
+    font-family: 'SF Mono', 'Menlo', monospace;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .vc .row .desc { font-size: 11px; color: #666; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vc .bottom-bar {
+    padding: 8px 20px; background: #141416;
+    border-top: 1px solid #222226;
+    font-size: 11px; color: #555;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .vc .bottom-bar .sep { color: #333; }
+  .vc .bottom-bar .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .vc ::-webkit-scrollbar { width: 6px; }
+  .vc ::-webkit-scrollbar-track { background: transparent; }
+  .vc ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+  .vc ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+  /* ═══════════════════════════════════════════════
+     VARIANT D: Cards
+     ═══════════════════════════════════════════════ */
+  .vd { background: #f0eff4; flex-direction: column; }
+  .vd .header {
+    padding: 20px 24px 16px; background: #fff;
+    border-bottom: 1px solid #e0dfe4;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .vd .header h1 { font-size: 18px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.02em; }
+  .vd .header .search-wrap { flex: 1; position: relative; max-width: 320px; margin-left: auto; }
+  .vd .header .search-wrap .icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: #aeaeb2; font-size: 14px; pointer-events: none;
+  }
+  .vd .header input {
+    width: 100%; padding: 8px 12px 8px 34px;
+    border: 1px solid #e0dfe4; border-radius: 10px;
+    background: #f6f5fa; font-size: 13px; color: #1d1d1f;
+    outline: none; font-family: inherit;
+  }
+  .vd .header input:focus { border-color: #5e5ce6; box-shadow: 0 0 0 3px rgba(94,92,230,0.1); background: #fff; }
+  .vd .chip-bar {
+    padding: 10px 24px; background: #fff;
+    border-bottom: 1px solid #e0dfe4;
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .vd .vchip {
+    padding: 5px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s;
+    background: #f0eff4; color: #666; border: 1px solid transparent;
+  }
+  .vd .vchip:hover { background: #e8e7ec; }
+  .vd .vchip.on { background: #1d1d1f; color: #fff; }
+  .vd .grid-wrap { flex: 1; overflow-y: auto; padding: 16px 24px; }
+  .vd .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .vd .card {
+    background: #fff; border-radius: 12px; padding: 16px;
+    cursor: default; transition: all 0.15s; border: 1px solid #e8e7ec;
+  }
+  .vd .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); border-color: #d1d1d6; transform: translateY(-1px); }
+  .vd .card.selected { border-color: #5e5ce6; box-shadow: 0 4px 16px rgba(94,92,230,0.12); }
+  .vd .card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; }
+  .vd .card .name { font-size: 13.5px; font-weight: 600; color: #1d1d1f; }
+  .vd .card .desc { font-size: 12px; color: #86868b; line-height: 1.4; margin-bottom: 10px; }
+  .vd .card-bottom { display: flex; align-items: center; justify-content: space-between; }
+  .vd .card-bottom .left { display: flex; align-items: center; gap: 6px; }
+  .vd .footer {
+    padding: 10px 24px; background: #fff;
+    border-top: 1px solid #e0dfe4;
+    font-size: 11px; color: #86868b;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .vd .footer .sep { color: #e0dfe4; }
+</style>
+</head>
+<body>
+
+<!-- ═══ Variant Switcher ═══ -->
+<div class="variant-bar">
+  <button class="variant-btn active" data-target="va"><span class="key">1</span>macOS 侧栏</button>
+  <button class="variant-btn" data-target="vb"><span class="key">2</span>密集表格</button>
+  <button class="variant-btn" data-target="vc"><span class="key">3</span>暗色 Pro</button>
+  <button class="variant-btn" data-target="vd"><span class="key">4</span>卡片网格</button>
+</div>
+
+<!-- ═══ VARIANT A: macOS Sidebar ═══ -->
+<div class="variant va active" id="va">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="app-icon">S</div>
+      <h1>Skill Manager</h1>
+    </div>
+    <div class="sidebar-section">
+      <div class="section-title">分类</div>
+      <div class="nav-item active"><span class="label">全部</span><span class="cnt">70</span></div>
+      <div class="nav-item"><span class="label">规划</span><span class="cnt">9</span></div>
+      <div class="nav-item"><span class="label">开发</span><span class="cnt">5</span></div>
+      <div class="nav-item"><span class="label">质量</span><span class="cnt">5</span></div>
+      <div class="nav-item"><span class="label">调试</span><span class="cnt">5</span></div>
+      <div class="nav-item"><span class="label">项目管理</span><span class="cnt">8</span></div>
+      <div class="nav-item"><span class="label">网页</span><span class="cnt">4</span></div>
+      <div class="nav-item"><span class="label">内容</span><span class="cnt">11</span></div>
+      <div class="nav-item"><span class="label">架构</span><span class="cnt">11</span></div>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="section-title">范围</div>
+      <div class="chips">
+        <span class="chip on">仅通用</span>
+      </div>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="section-title">频次</div>
+      <div class="nav-item"><span class="label">规划</span><span class="cnt">9</span></div>
+      <div class="nav-item"><span class="label">开发</span><span class="cnt">5</span></div>
+      <div class="nav-item"><span class="label">质量</span><span class="cnt">5</span></div>
+      <div class="nav-item"><span class="label">调试</span><span class="cnt">5</span></div>
+      <div class="nav-item"><span class="label">项目管理</span><span class="cnt">8</span></div>
+      <div class="nav-item"><span class="label">网页</span><span class="cnt">4</span></div>
+      <div class="nav-item"><span class="label">内容</span><span class="cnt">11</span></div>
+      <div class="nav-item"><span class="label">架构</span><span class="cnt">11</span></div>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="section-title">频次</div>
+      <div class="chips">
+        <span class="chip on">高频</span>
+        <span class="chip on">中频</span>
+        <span class="chip on">低频</span>
+      </div>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="section-title">Agent</div>
+      <div class="chips">
+        <span class="chip claude-chip on">Claude</span>
+        <span class="chip codex-chip on">Codex</span>
+        <span class="chip hermes-chip on">Hermes</span>
+      </div>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="search-bar">
+      <div class="search-wrap">
+        <span class="icon">&#128269;</span>
+        <input class="search-input" type="text" placeholder="搜索 Skill..." />
+      </div>
+      <button class="search-btn">&#8635;</button>
+      <button class="search-btn">+</button>
+    </div>
+    <div class="list-header">
+      <span class="c1">Skill</span>
+      <span class="c2">Agent</span>
+      <span class="c3">频次</span>
+      <span class="c4">来源</span>
+    </div>
+    <div class="skill-list" id="skill-list-a"></div>
+    <div class="deploy-bar" id="deploy-bar-a">
+      <span class="label">部署到：</span>
+      <div class="deploy-targets">
+        <button class="deploy-btn claude-btn deployed" data-agent="claude"><span class="dot"></span> Claude</button>
+        <button class="deploy-btn codex-btn deployed" data-agent="codex"><span class="dot"></span> Codex</button>
+        <button class="deploy-btn hermes-btn deployed" data-agent="hermes"><span class="dot"></span> Hermes</button>
+      </div>
+      <span class="deploy-hint">点击切换部署状态 · 右键查看选项</span>
+    </div>
+    <div class="status-bar">
+      <span>共 70 个 Skill</span>
+      <span class="sep">·</span>
+      <span><span class="status-dot" style="background:var(--claude)"></span> Claude 51</span>
+      <span class="sep">·</span>
+      <span><span class="status-dot" style="background:var(--codex-bg)"></span> Codex 28</span>
+      <span class="sep">·</span>
+      <span><span class="status-dot" style="background:var(--hermes)"></span> Hermes 170</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ VARIANT B: Dense Table ═══ -->
+<div class="variant vb" id="vb">
+  <div class="toolbar">
+    <h1>Skill Manager</h1>
+    <div class="search-wrap">
+      <span class="icon">&#128269;</span>
+      <input type="text" placeholder="搜索..." />
+    </div>
+    <div class="filter-group">
+      <button class="filter-btn active">全部</button>
+      <button class="filter-btn">高频</button>
+      <button class="filter-btn">中频</button>
+      <button class="filter-btn">低频</button>
+    </div>
+    <div class="agent-filters">
+      <div class="af claude on">C</div>
+      <div class="af codex on">O</div>
+      <div class="af hermes on">H</div>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:180px" data-col="0">Skill <div class="th-filter" id="filter-0"></div></th>
+          <th data-col="1">描述</th>
+          <th style="width:80px" data-col="2">Agent <div class="th-filter" id="filter-2"></div></th>
+          <th style="width:50px" data-col="3">频次 <div class="th-filter" id="filter-3"></div></th>
+          <th style="width:60px" data-col="4">来源 <div class="th-filter" id="filter-4"></div></th>
+        </tr>
+      </thead>
+      <tbody id="skill-table-b"></tbody>
+    </table>
+  </div>
+  <div class="deploy-bar" id="deploy-bar-b" style="background:#f6f6f6;border-top-color:#d1d1d6">
+    <span class="label">部署到：</span>
+    <div class="deploy-targets">
+      <button class="deploy-btn claude-btn deployed" data-agent="claude"><span class="dot"></span> Claude</button>
+      <button class="deploy-btn codex-btn deployed" data-agent="codex"><span class="dot"></span> Codex</button>
+      <button class="deploy-btn hermes-btn deployed" data-agent="hermes"><span class="dot"></span> Hermes</button>
+    </div>
+    <span class="deploy-hint">点击切换部署状态</span>
+  </div>
+  <div class="footer">
+    <span>共 70 个 Skill</span>
+    <span class="sep">·</span>
+    <span>Claude 51</span>
+    <span class="sep">·</span>
+    <span>Codex 28</span>
+    <span class="sep">·</span>
+    <span>Hermes 170</span>
+  </div>
+</div>
+
+<!-- ═══ VARIANT C: Dark Pro ═══ -->
+<div class="variant vc" id="vc">
+  <div class="top-bar">
+    <h1>Skill Manager</h1>
+    <div class="search-wrap">
+      <span class="icon">&#128269;</span>
+      <input type="text" placeholder="搜索 Skill..." />
+    </div>
+    <div class="pills">
+      <span class="pill on">全部</span>
+      <span class="pill">高</span>
+      <span class="pill">中</span>
+      <span class="pill">低</span>
+    </div>
+  </div>
+  <div class="content">
+    <div class="left-filter">
+      <div class="filter-group-title">分类</div>
+      <div class="filter-item active"><span>全部</span><span class="cnt">70</span></div>
+      <div class="filter-item"><span style="color:#64d2ff">仅通用</span><span class="cnt" style="color:#64d2ff">70</span></div>
+      <div class="filter-group-title" style="margin-top:8px">领域</div>
+      <div class="filter-item"><span>规划</span><span class="cnt">9</span></div>
+      <div class="filter-item"><span>开发</span><span class="cnt">5</span></div>
+      <div class="filter-item"><span>质量</span><span class="cnt">5</span></div>
+      <div class="filter-item"><span>调试</span><span class="cnt">5</span></div>
+      <div class="filter-item"><span>项目管理</span><span class="cnt">8</span></div>
+      <div class="filter-item"><span>网页</span><span class="cnt">4</span></div>
+      <div class="filter-item"><span>内容</span><span class="cnt">11</span></div>
+      <div class="filter-item"><span>架构</span><span class="cnt">11</span></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+      <div class="list-area" id="skill-list-c" style="flex:1"></div>
+      <div class="deploy-bar" id="deploy-bar-c" style="background:#141416;border-top-color:#222226">
+        <span class="label" style="color:#888">部署到：</span>
+        <div class="deploy-targets">
+          <button class="deploy-btn claude-btn deployed" data-agent="claude"><span class="dot"></span> Claude</button>
+          <button class="deploy-btn codex-btn deployed" data-agent="codex"><span class="dot"></span> Codex</button>
+          <button class="deploy-btn hermes-btn deployed" data-agent="hermes"><span class="dot"></span> Hermes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <span>共 70 个 Skill</span>
+    <span class="sep">·</span>
+    <span><span class="dot" style="background:var(--claude)"></span> Claude 51</span>
+    <span class="sep">·</span>
+    <span><span class="dot" style="background:var(--codex-bg)"></span> Codex 28</span>
+    <span class="sep">·</span>
+    <span><span class="dot" style="background:var(--hermes)"></span> Hermes 170</span>
+  </div>
+</div>
+
+<!-- ═══ VARIANT D: Cards ═══ -->
+<div class="variant vd" id="vd">
+  <div class="header">
+    <h1>Skill Manager</h1>
+    <div class="search-wrap">
+      <span class="icon">&#128269;</span>
+      <input type="text" placeholder="搜索 Skill..." />
+    </div>
+  </div>
+  <div class="chip-bar">
+    <span class="vchip on">全部</span>
+    <span class="vchip">仅通用</span>
+    <span class="vchip">规划</span>
+    <span class="vchip">开发</span>
+    <span class="vchip">质量</span>
+    <span class="vchip">调试</span>
+    <span class="vchip">项目管理</span>
+  </div>
+  <div class="grid-wrap">
+    <div class="grid" id="skill-grid-d"></div>
+  </div>
+  <div class="footer">
+    <span>共 70 个 Skill</span>
+    <span class="sep">·</span>
+    <span>Claude 51</span>
+    <span class="sep">·</span>
+    <span>Codex 28</span>
+    <span class="sep">·</span>
+    <span>Hermes 170</span>
+  </div>
+</div>
+
+<script>
+const SKILLS = [
+  { name: 'brainstorming', desc: '创造性工作前的头脑风暴和需求澄清', agents: ['claude','codex','hermes'], freq: '高', freqClass: 'high', src: 'ECC' },
+  { name: 'karpathy-guidelines', desc: '编码准则：简单、克制、可验证', agents: ['claude','codex','hermes'], freq: '高', freqClass: 'high', src: 'Codex' },
+  { name: 'frontend-design', desc: '生产级前端界面设计，避免 AI 通用审美', agents: ['claude','codex','hermes'], freq: '高', freqClass: 'high', src: 'ECC' },
+  { name: 'tdd', desc: '测试驱动开发 red-green-refactor', agents: ['claude','codex','hermes'], freq: '高', freqClass: 'high', src: 'Matt' },
+  { name: 'diagnose', desc: '系统化诊断循环：复现→最小化→假设→修复', agents: ['claude','codex','hermes'], freq: '高', freqClass: 'high', src: 'Matt' },
+  { name: 'web-access', desc: '联网操作入口：搜索、抓网页、CDP 浏览器', agents: ['claude','hermes'], freq: '高', freqClass: 'high', src: 'ECC' },
+  { name: 'search-first', desc: '实现前先搜索项目已有模式和开源参考', agents: ['claude','codex','hermes'], freq: '中', freqClass: 'medium', src: 'Codex' },
+  { name: 'grill-me', desc: '持续追问挑战方案，暴露盲区', agents: ['claude','codex','hermes'], freq: '中', freqClass: 'medium', src: 'Matt' },
+];
+
+const ALL_AGENTS = ['claude','codex','hermes'];
+const AGENT_LABELS = { claude: 'C', codex: 'O', hermes: 'H' };
+
+function badge(a, deployed) {
+  return `<div class="agent-badge ${a} ${deployed ? '' : 'off'}" data-agent="${a}">${AGENT_LABELS[a]}</div>`;
+}
+function badgesHTML(skill) {
+  return ALL_AGENTS.map(a => badge(a, skill.agents.includes(a))).join('');
+}
+function freqHTML(skill) {
+  return `<span class="freq ${skill.freqClass}">${skill.freq}</span>`;
+}
+
+// ─── Variant A
+const listA = document.getElementById('skill-list-a');
+SKILLS.forEach((s, i) => {
+  listA.innerHTML += `
+    <div class="skill-row${i===0?' selected':''}" data-idx="${i}">
+      <div class="skill-info">
+        <div class="skill-name">${s.name}</div>
+        <div class="skill-desc">${s.desc}</div>
+      </div>
+      <div class="agent-badges">${badgesHTML(s)}</div>
+      ${freqHTML(s)}
+      <span class="src">${s.src}</span>
+    </div>`;
+});
+
+// ─── Variant B
+const tbodyB = document.getElementById('skill-table-b');
+SKILLS.forEach((s, i) => {
+  tbodyB.innerHTML += `
+    <tr class="${i===0?'selected':''}" data-idx="${i}">
+      <td>${s.name}</td>
+      <td>${s.desc}</td>
+      <td><div class="agent-badges" style="justify-content:center">${badgesHTML(s)}</div></td>
+      <td>${freqHTML(s)}</td>
+      <td>${s.src}</td>
+    </tr>`;
+});
+
+// ─── Variant C
+const listC = document.getElementById('skill-list-c');
+SKILLS.forEach((s, i) => {
+  listC.innerHTML += `
+    <div class="row${i===0?' selected':''}" data-idx="${i}">
+      <div class="info">
+        <div class="name">${s.name}</div>
+        <div class="desc">${s.desc}</div>
+      </div>
+      <div class="agent-badges">${badgesHTML(s)}</div>
+      ${freqHTML(s)}
+      <span class="src" style="color:#555">${s.src}</span>
+    </div>`;
+});
+
+// ─── Variant D
+const gridD = document.getElementById('skill-grid-d');
+SKILLS.forEach((s, i) => {
+  gridD.innerHTML += `
+    <div class="card${i===0?' selected':''}" data-idx="${i}">
+      <div class="card-top">
+        <div class="name">${s.name}</div>
+        ${freqHTML(s)}
+      </div>
+      <div class="desc">${s.desc}</div>
+      <div class="card-bottom">
+        <div class="left"><div class="agent-badges">${badgesHTML(s)}</div></div>
+        <span class="src" style="font-size:11px;color:#aeaeb2">${s.src}</span>
+      </div>
+    </div>`;
+});
+
+// ─── Deploy bar logic
+let selectedIdx = 0;
+
+function updateDeployBars() {
+  const skill = SKILLS[selectedIdx];
+  document.querySelectorAll('.deploy-bar').forEach(bar => {
+    bar.classList.add('visible');
+    bar.querySelectorAll('.deploy-btn').forEach(btn => {
+      const agent = btn.dataset.agent;
+      if (skill.agents.includes(agent)) {
+        btn.classList.add('deployed');
+      } else {
+        btn.classList.remove('deployed');
+      }
+    });
+  });
+}
+
+updateDeployBars();
+
+// Deploy button click
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.deploy-btn');
+  if (btn) {
+    const agent = btn.dataset.agent;
+    const skill = SKILLS[selectedIdx];
+    const idx = skill.agents.indexOf(agent);
+    if (idx >= 0) {
+      skill.agents.splice(idx, 1);
+    } else {
+      skill.agents.push(agent);
+    }
+    // Update badges in all variants
+    document.querySelectorAll(`[data-idx="${selectedIdx}"] .agent-badge[data-agent="${agent}"]`).forEach(b => {
+      b.classList.toggle('off');
+    });
+    updateDeployBars();
+    return;
+  }
+
+  // Agent badge click (toggle deploy directly)
+  const badgeEl = e.target.closest('.agent-badge');
+  if (badgeEl) {
+    const agent = badgeEl.dataset.agent;
+    const row = badgeEl.closest('[data-idx]');
+    if (row) {
+      selectedIdx = parseInt(row.dataset.idx);
+      const skill = SKILLS[selectedIdx];
+      const idx = skill.agents.indexOf(agent);
+      if (idx >= 0) {
+        skill.agents.splice(idx, 1);
+      } else {
+        skill.agents.push(agent);
+      }
+      document.querySelectorAll(`[data-idx="${selectedIdx}"] .agent-badge[data-agent="${agent}"]`).forEach(b => {
+        b.classList.toggle('off');
+      });
+      updateDeployBars();
+    }
+    return;
+  }
+
+  // Row selection
+  const row = e.target.closest('[data-idx]');
+  if (row) {
+    selectedIdx = parseInt(row.dataset.idx);
+    // Update selection visual
+    document.querySelectorAll('.skill-row, .row, tbody tr, .card').forEach(r => r.classList.remove('selected'));
+    document.querySelectorAll(`[data-idx="${selectedIdx}"]`).forEach(r => r.classList.add('selected'));
+    updateDeployBars();
+  }
+});
+
+// Variant switcher
+document.querySelectorAll('.variant-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.variant-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.target).classList.add('active');
+  });
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === '1') document.querySelector('[data-target="va"]').click();
+  if (e.key === '2') document.querySelector('[data-target="vb"]').click();
+  if (e.key === '3') document.querySelector('[data-target="vc"]').click();
+  if (e.key === '4') document.querySelector('[data-target="vd"]').click();
+});
+
+// Sidebar/chip interactivity
+document.addEventListener('click', e => {
+  if (e.target.closest('.nav-item')) {
+    const parent = e.target.closest('.sidebar-section');
+    parent.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    e.target.closest('.nav-item').classList.add('active');
+  }
+  if (e.target.classList.contains('chip') || e.target.classList.contains('vchip') || e.target.classList.contains('pill')) {
+    e.target.classList.toggle('on');
+  }
+  if (e.target.classList.contains('filter-btn')) {
+    const group = e.target.closest('.filter-group');
+    group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+  }
+  if (e.target.classList.contains('af')) {
+    e.target.classList.toggle('on');
+  }
+  if (e.target.closest('.filter-item')) {
+    const parent = e.target.closest('.left-filter');
+    parent.querySelectorAll('.filter-item').forEach(n => n.classList.remove('active'));
+    e.target.closest('.filter-item').classList.add('active');
+  }
+
+  // Table header filter toggle
+  const th = e.target.closest('thead th[data-col]');
+  if (th && th.querySelector('.th-filter')) {
+    const filter = th.querySelector('.th-filter');
+    // Close all other filters
+    document.querySelectorAll('.th-filter.open').forEach(f => {
+      if (f !== filter) f.classList.remove('open');
+    });
+    filter.classList.toggle('open');
+    e.stopPropagation();
+    return;
+  }
+
+  // Close filters when clicking outside
+  if (!e.target.closest('.th-filter')) {
+    document.querySelectorAll('.th-filter.open').forEach(f => f.classList.remove('open'));
+  }
+});
+
+// ─── Table header filters (Excel-style)
+const FILTER_DEFS = {
+  'filter-2': {
+    label: 'Agent',
+    options: [
+      { label: '全部部署', value: 'all', icon: '🟢' },
+      { label: 'Claude', value: 'claude', icon: '🟠' },
+      { label: 'Codex', value: 'codex', icon: '🔵' },
+      { label: 'Hermes', value: 'hermes', icon: '🟡' },
+      { label: '未部署 Codex', value: 'no-codex', icon: '⚪' },
+    ]
+  },
+  'filter-3': {
+    label: '频次',
+    options: [
+      { label: '高', value: '高' },
+      { label: '中', value: '中' },
+      { label: '低', value: '低' },
+    ]
+  },
+  'filter-4': {
+    label: '来源',
+    options: [
+      { label: 'ECC', value: 'ECC' },
+      { label: 'Matt Pocock', value: 'Matt' },
+      { label: 'Codex', value: 'Codex' },
+    ]
+  }
+};
+
+// Build filter dropdowns
+Object.entries(FILTER_DEFS).forEach(([id, def]) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = def.options.map(opt => `
+    <label class="th-filter-item">
+      <input type="checkbox" checked value="${opt.value}" />
+      <span>${opt.label}</span>
+    </label>
+  `).join('');
+
+  // Prevent clicks inside filter from closing it
+  el.addEventListener('click', e => e.stopPropagation());
+});
+
+// Initialize all filter checkboxes as checked
+const activeFilters = {
+  'filter-2': new Set(['all']),
+  'filter-3': new Set(['高', '中', '低']),
+  'filter-4': new Set(['ECC', 'Matt', 'Codex']),
+};
+</script>
+
+</body>
+</html>
