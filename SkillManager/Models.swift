@@ -189,7 +189,7 @@ enum DeployError: LocalizedError {
 struct FilterState {
     var selectedCategory: Category = .all
     var selectedFrequencies: Set<Frequency> = Set(Frequency.allCases)
-    var selectedCompatibleAgents: Set<Agent> = Set(Agent.allCases)
+    var selectedCompatibleAgent: Agent? = nil  // nil = all, single select
     var selectedInstalledAgent: Agent? = nil  // nil = all, single select
     var onlyUniversal: Bool = false
     var searchText: String = ""
@@ -204,9 +204,11 @@ struct FilterState {
         if !selectedFrequencies.contains(skill.frequency) {
             return false
         }
-        // Agent 适配: skill must be compatible with at least one selected agent
-        if !selectedCompatibleAgents.isEmpty && skill.compatibleWith.isDisjoint(with: selectedCompatibleAgents) {
-            return false
+        // Agent 适配: single select — show all if nil, or only skills compatible with selected agent
+        if let selectedAgent = selectedCompatibleAgent {
+            if skill.compatibleWith.contains(selectedAgent) == false {
+                return false
+            }
         }
         // Agent 已安装: single select — show all if nil, or only skills installed in selected agent
         if let selectedAgent = selectedInstalledAgent {

@@ -226,7 +226,7 @@ struct SidebarView: View {
     }
 
     private func compatibleAgentChip(_ agent: Agent) -> some View {
-        let isOn = filter.selectedCompatibleAgents.contains(agent)
+        let isOn = filter.selectedCompatibleAgent == agent
         let color = agent.color
         return Text(agent.displayName.components(separatedBy: " ").first ?? agent.displayName)
             .font(.system(size: 11))
@@ -240,8 +240,8 @@ struct SidebarView: View {
             )
             .cornerRadius(12)
             .onTapGesture {
-                if isOn { filter.selectedCompatibleAgents.remove(agent) }
-                else { filter.selectedCompatibleAgents.insert(agent) }
+                if isOn { filter.selectedCompatibleAgent = nil }
+                else { filter.selectedCompatibleAgent = agent }
             }
     }
 
