@@ -36,20 +36,20 @@ struct SkillScanner {
                     // Merge: add agents from this directory to existing skill
                     var merged = existing
                     merged.deployedIn.formUnion(skill.deployedIn)
-                    // If now in 3+ agents → mark as universal
-                    if merged.deployedIn.count >= 3 {
+                    // If now in all 3 agents → mark as universal
+                    if merged.deployedIn.count >= 3 || merged.deployedIn == Set(Agent.allCases) {
                         merged.isUniversal = true
                         merged.compatibleWith = Set(Agent.allCases)
                     }
                     skillMap[key] = merged
                 } else {
-                    // Mark as universal if already in 3+ agents
-                    var newSkill = skill
-                    if newSkill.deployedIn.count >= 3 {
-                        newSkill.isUniversal = true
-                        newSkill.compatibleWith = Set(Agent.allCases)
+                    // Check if already universal (e.g., from vault scan with allAgents)
+                    var skill = skill
+                    if skill.deployedIn == Set(Agent.allCases) {
+                        skill.isUniversal = true
+                        skill.compatibleWith = Set(Agent.allCases)
                     }
-                    skillMap[key] = newSkill
+                    skillMap[key] = skill
                 }
             }
         }
