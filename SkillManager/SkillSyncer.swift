@@ -184,7 +184,66 @@ struct SkillSyncer {
             }
         }
 
+        // Auto-generate inventory from scan results
+        generateInventory(skills: skills)
+
         return copied
+    }
+
+    // MARK: - Auto-generate Inventory from Scan Results
+
+    static func generateInventory(skills: [Skill]) {
+        let inventoryDir = (localRepoPath as NSString).appendingPathComponent("inventory")
+        if !FileManager.default.fileExists(atPath: inventoryDir) {
+            try? FileManager.default.createDirectory(atPath: inventoryDir, withIntermediateDirectories: true)
+        }
+
+        let outputPath = (inventoryDir as NSString).appendingPathComponent("Agent Skill 通用清单.md")
+
+        // Group skills by category
+        var byCategory: [Category: [Skill]] = [:]
+        for skill in skills {
+            guard skill.isUniversal else { continue }
+            byCategory[skill.category, default: []].append(skill)
+        }
+
+        // Category display names
+        let categoryNames: [Category: String] = [
+            .planning: "规划 & 设计",
+            .dev: "开发 & 构建",
+            .quality: "代码质量 & 审查",
+            .debug: "调试 & 测试",
+            .project: "项目管理",
+            .web: "网页 & 搜索",
+            .content: "内容 & 文档",
+            .arch: "架构 & 模式",
+            .other: "其他",
+        ]
+
+        var md = "# Agent Skill 通用清单\n\n"
+        md += "> 自动生成 — 从三个 Agent 目录扫描，三个都有 = 通用\n\n"
+        md += "---\n\n"
+
+        let order: [Category] = [.planning, .quality, .debug, .project, .web, .content, .arch, .other]
+        for cat in order {
+            guard let catSkills = byCategory[cat], !catSkills.isEmpty else { continue }
+            let name = categoryNames[cat] ?? cat.rawValue
+            md += "## \(name)\n\n"
+            md += "| Skill | 来源 | 频次 | 适配 | 用途 |\n"
+            md += "|---|---|:---:|---|---|\n"
+            for skill in catSkills.sorted(by: { $0.name < $1.name }) {
+                let agents = skill.compatibleWith
+                    .sorted(by: { $0.rawValue < $1.rawValue })
+                    .map { $0.displayName }
+                    .joined(separator: " / ")
+                md += "| `\(skill.name)` | \(skill.source) | \(skill.frequency.rawValue) | \(agents) | \(skill.description) |\n"
+            }
+            md += "\n"
+        }
+
+        md += "---\n\n**合计：\(skills.filter { $0.isUniversal }.count) 个通用 Skill**\n"
+
+        try? md.write(toFile: outputPath, atomically: true, encoding: .utf8)
     }
 
     // MARK: - Install from Vault to Agent
