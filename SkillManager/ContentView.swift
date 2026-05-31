@@ -11,6 +11,7 @@ struct ContentView: View {
         ?? "/Volumes/PJSSD/通用skill及指南/Skill 清单/Agents Skill 跨平台对比清单.md"
     @State private var showToast = false
     @State private var toastMessage = ""
+    @FocusState private var isSearchFocused: Bool
     @Environment(\.colorScheme) private var scheme
     private var isDark: Bool { scheme == .dark }
 
@@ -31,7 +32,7 @@ struct ContentView: View {
 
             mainContent
         }
-        .frame(minWidth: 960, minHeight: 600)
+        .frame(minWidth: 1100, minHeight: 600)
         .onAppear { store.load(inventoryPath: inventoryPath) }
         .onChange(of: store.lastError) { _, newError in
             if let err = newError {
@@ -99,6 +100,8 @@ struct ContentView: View {
                 .foregroundColor(isDark ? Color(hex: 0x6E6E73) : Color(hex: 0xAEAEB2))
             TextField("搜索 Skill...", text: $filter.searchText)
                 .font(.system(size: 13))
+                .textFieldStyle(.plain)
+                .focused($isSearchFocused)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
@@ -107,6 +110,7 @@ struct ContentView: View {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 6)
+        .onTapGesture { isSearchFocused = true }
     }
 
     // MARK: - Table
@@ -121,7 +125,7 @@ struct ContentView: View {
                     migrationBadge(skill.migration)
                 }
             }
-            .width(min: 160, ideal: 180, max: 240)
+            .width(min: 180, ideal: 220, max: 400)
 
             TableColumn("描述") { skill in
                 Text(skill.description)
@@ -141,12 +145,12 @@ struct ContentView: View {
                     }
                 }
             }
-            .width(min: 72, ideal: 72, max: 72)
+            .width(min: 72, ideal: 72, max: 80)
 
             TableColumn("频次") { skill in
                 FrequencyBadge(frequency: skill.frequency)
             }
-            .width(min: 40, ideal: 40, max: 40)
+            .width(min: 40, ideal: 40, max: 50)
 
             TableColumn("来源", value: \.source) { skill in
                 Text(skill.source)
@@ -154,7 +158,7 @@ struct ContentView: View {
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
-            .width(min: 60, ideal: 65, max: 80)
+            .width(min: 60, ideal: 70, max: 100)
         }
         .contextMenu(forSelectionType: String.self) { ids in
             if let firstId = ids.first, let skill = store.skills.first(where: { $0.id == firstId }) {
