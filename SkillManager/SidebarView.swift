@@ -50,11 +50,6 @@ struct SidebarView: View {
 
             divider
 
-            sectionTitle("范围")
-            // 仅通用已移除 — Agent 适配全选 = 仅通用
-
-            divider
-
             // Frequency
             sectionTitle("频次")
             HStack(spacing: 5) {
