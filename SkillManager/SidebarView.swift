@@ -50,24 +50,8 @@ struct SidebarView: View {
 
             divider
 
-            // Universal filter
             sectionTitle("范围")
-            HStack(spacing: 5) {
-                let isOn = filter.onlyUniversal
-                Text("仅通用")
-                    .font(.system(size: 11))
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 3)
-                    .background(isOn ? Color(hex: 0x5E5CE6).opacity(0.2) : Color.clear)
-                    .foregroundColor(isOn ? Color(hex: 0xA78BFA) : textDim)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isOn ? Color(hex: 0x5E5CE6) : Color.white.opacity(0.1), lineWidth: 1)
-                    )
-                    .cornerRadius(12)
-                    .onTapGesture { filter.onlyUniversal.toggle() }
-            }
-            .padding(.horizontal, 16)
+            // 仅通用已移除 — Agent 适配全选 = 仅通用
 
             divider
 

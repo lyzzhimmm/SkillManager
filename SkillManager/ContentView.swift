@@ -109,7 +109,7 @@ struct ContentView: View {
 
     private var skillTable: some View {
         Table(filteredSkills, selection: $selectedSkillIds, sortOrder: $sortOrder) {
-            TableColumn("Skill", value: \.name) { skill in
+            TableColumn("Skill (\(filteredSkills.count))", value: \.name) { skill in
                 HStack(spacing: 4) {
                     Text(skill.name)
                         .font(.system(size: 13, weight: .semibold))
