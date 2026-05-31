@@ -7,8 +7,15 @@ struct ContentView: View {
     @State private var sortOrder = [KeyPathComparator(\Skill.name)]
     @State private var showDeployConfirm = false
     @State private var pendingDeployAgent: Agent?
-    @State private var inventoryPath: String = UserDefaults.standard.string(forKey: "inventoryPath")
-        ?? "/Volumes/PJSSD/通用skill及指南/Skill 清单/Agents Skill 跨平台对比清单.md"
+    @State private var inventoryPath: String = {
+        let vaultPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".skill-vault/inventory/Agents Skill 跨平台对比清单.md").path
+        if FileManager.default.fileExists(atPath: vaultPath) {
+            return vaultPath
+        }
+        return UserDefaults.standard.string(forKey: "inventoryPath")
+            ?? "/Volumes/PJSSD/通用skill及指南/Skill 清单/Agents Skill 跨平台对比清单.md"
+    }()
     @State private var showToast = false
     @State private var toastMessage = ""
     @Environment(\.colorScheme) private var scheme

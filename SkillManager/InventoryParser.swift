@@ -20,7 +20,15 @@ struct InventoryParser {
 
     // MARK: - Paths
 
-    static let inventoryDir = "/Volumes/PJSSD/通用skill及指南/Skill 清单"
+    static let inventoryDir: String = {
+        // Prefer vault repo path, fallback to local path
+        let vaultDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".skill-vault/inventory").path
+        if FileManager.default.fileExists(atPath: vaultDir) {
+            return vaultDir
+        }
+        return "/Volumes/PJSSD/通用skill及指南/Skill 清单"
+    }()
 
     static var inventoryPath: String {
         UserDefaults.standard.string(forKey: "inventoryPath")
