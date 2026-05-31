@@ -4,7 +4,7 @@ struct ContentView: View {
     @StateObject private var store = SkillStore()
     @State private var filter = FilterState()
     @State private var selectedSkillIds: Set<String> = []
-    @State private var sortOrder = [KeyPathComparator(\Skill.name)]
+    @State private var sortOrder = [KeyPathComparator(\Skill.frequency, order: .forward), KeyPathComparator(\Skill.name)]
     @State private var showDeployConfirm = false
     @State private var pendingDeployAgent: Agent?
     @State private var inventoryPath: String = {
