@@ -129,8 +129,10 @@ struct SkillScanner {
         let source = meta?.source ?? ""
         let isUniversal = meta?.isUniversal ?? false
         let migration = meta?.migration ?? .portable
-        // Universal skills are compatible with all agents; others use inventory data or default to empty
-        let compatibleWith: Set<Agent> = isUniversal ? Set(Agent.allCases) : (meta?.compatibleWith ?? [])
+        // Universal skills are compatible with all agents; others use inventory data + installed agents
+        var compatibleWith: Set<Agent> = isUniversal ? Set(Agent.allCases) : (meta?.compatibleWith ?? [])
+        // If skill is installed in an agent, it's compatible with that agent
+        compatibleWith.formUnion(agents)
 
         let inventoryDesc = meta?.description.trimmingCharacters(in: .whitespaces) ?? ""
         let finalDesc = inventoryDesc.isEmpty ? parsedDesc : inventoryDesc
