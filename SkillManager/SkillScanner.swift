@@ -27,12 +27,17 @@ struct SkillScanner {
 
         for (name, info) in localSkills {
             if let skill = parseLocalSkill(name: name, dirs: info.dirs, agents: info.agents, crossPlatform: crossPlatform) {
-                // Use parsedName as key to avoid duplicates (e.g. build-macos-apps-liquid-glass vs liquid-glass)
+                // Use parsedName as key to avoid duplicates
                 let key = skill.name
                 if let existing = skillMap[key] {
                     // Merge: add agents from this directory to existing skill
                     var merged = existing
                     merged.deployedIn.formUnion(skill.deployedIn)
+                    // If now in all 3 agents → mark as universal
+                    if merged.deployedIn.count >= 3 || merged.deployedIn == Set(Agent.allCases) {
+                        merged.isUniversal = true
+                        merged.compatibleWith = Set(Agent.allCases)
+                    }
                     skillMap[key] = merged
                 } else {
                     skillMap[key] = skill

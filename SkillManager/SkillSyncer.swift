@@ -136,7 +136,7 @@ struct SkillSyncer {
         }.sorted()
     }
 
-    // MARK: - Collect Local Universal Skills → Vault
+    // MARK: - Collect ALL Skills → Vault
 
     static func collectToVault(skills: [Skill]) -> Int {
         let vaultSkillsDir = (localRepoPath as NSString).appendingPathComponent("skills")
@@ -150,13 +150,13 @@ struct SkillSyncer {
         }
 
         var copied = 0
-        var universalNames = Set<String>()
-        for skill in skills {
-            // Only collect skills marked as universal in the inventory
-            guard skill.isUniversal else { continue }
-            guard skill.isLocal else { continue }
+        var allNames = Set<String>()
 
-            universalNames.insert(skill.name)
+        // Collect ALL local skills (universal + exclusive)
+        for skill in skills {
+            guard skill.isLocal else { continue }
+            allNames.insert(skill.name)
+
             let sourceDir = skill.filePath.deletingLastPathComponent()
             let targetDir = URL(fileURLWithPath: vaultSkillsDir).appendingPathComponent(skill.name)
 
@@ -173,10 +173,10 @@ struct SkillSyncer {
             }
         }
 
-        // Clean up vault entries that are no longer universal
+        // Clean up vault entries that no longer exist locally
         if let existing = try? FileManager.default.contentsOfDirectory(atPath: vaultSkillsDir) {
             for name in existing {
-                if !universalNames.contains(name) {
+                if !allNames.contains(name) {
                     try? FileManager.default.removeItem(
                         atPath: (vaultSkillsDir as NSString).appendingPathComponent(name)
                     )
