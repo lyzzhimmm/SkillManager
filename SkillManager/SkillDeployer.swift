@@ -6,10 +6,20 @@ struct SkillDeployer {
 
     @discardableResult
     static func deploy(skill: Skill, to agent: Agent) throws -> Bool {
-        guard skill.isLocal else { throw DeployError.notLocalSkill }
+        // Source: vault directory or local agent directory
+        let vaultDir = SkillSyncer.localRepoPath + "/skills/\(skill.name)"
+        let localDir = skill.filePath.deletingLastPathComponent().path
 
-        let sourceDir = skill.filePath.deletingLastPathComponent()
-        let targetDir = agent.skillsDirectory.appendingPathComponent(skill.id)
+        let sourceDir: URL
+        if FileManager.default.fileExists(atPath: vaultDir) {
+            sourceDir = URL(fileURLWithPath: vaultDir)
+        } else if FileManager.default.fileExists(atPath: localDir) {
+            sourceDir = URL(fileURLWithPath: localDir)
+        } else {
+            throw DeployError.notLocalSkill
+        }
+
+        let targetDir = agent.skillsDirectory.appendingPathComponent(skill.name)
 
         // Ensure parent directory exists
         let parent = agent.skillsDirectory

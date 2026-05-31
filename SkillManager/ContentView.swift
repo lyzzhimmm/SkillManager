@@ -217,36 +217,14 @@ struct ContentView: View {
     // MARK: - Agent Toggle
 
     private func handleAgentToggle(skill: Skill, agent: Agent) {
+        // Already deployed → undeploy
         if skill.deployedIn.contains(agent) {
-            if skill.isLocal {
-                store.toggleDeploy(skillId: skill.id, agent: agent)
-            }
-            return
-        }
-
-        if !skill.isLocal {
-            copyToClipboard(
-                prompt: "请帮我安装 Skill `\(skill.name)`。\n\n描述：\(skill.description)\n来源：\(skill.originAgent?.displayName ?? "未知")\n\n请根据你的 Agent 环境创建对应的 SKILL.md 文件并安装。",
-                toast: "已复制到剪贴板，请打开 \(agent.displayName) 粘贴执行安装"
-            )
-            return
-        }
-
-        switch skill.migration {
-        case .portable:
             store.toggleDeploy(skillId: skill.id, agent: agent)
-        case .needsAdaptation:
-            copyToClipboard(
-                prompt: "请帮我适配并安装 Skill `\(skill.name)`。\n\n源文件位置：`\(skill.filePath.path)`\n\n它目前是 \(skill.originAgent?.displayName ?? "未知") 格式，需要适配到你的运行环境。",
-                toast: "已复制到剪贴板，请打开 \(agent.displayName) 粘贴执行适配"
-            )
-        case .exclusive(let exclusiveAgent):
-            let ownerName = exclusiveAgent?.displayName ?? "其他 Agent"
-            copyToClipboard(
-                prompt: "Skill `\(skill.name)` 是 \(ownerName) 专属，可能无法在你的环境中运行。\n\n源文件位置：`\(skill.filePath.path)`",
-                toast: "已复制到剪贴板，请打开 \(agent.displayName) 粘贴执行"
-            )
+            return
         }
+
+        // Not deployed → deploy from vault or agent directory
+        store.toggleDeploy(skillId: skill.id, agent: agent)
     }
 
     // MARK: - Batch Deploy
