@@ -189,13 +189,16 @@ struct InventoryParser {
                 migration = currentMigration
             }
 
+            // 通用 Skill = 纯 prompt，适配所有 Agent
+            let compatibleWith: Set<Agent> = universalNames.contains(name) ? Set(Agent.allCases) : parsed.compatibleWith
+
             dict[name] = SkillMeta(
                 frequency: parsed.frequency,
                 source: parsed.source,
                 isUniversal: universalNames.contains(name),
                 description: parsed.description,
                 migration: migration,
-                compatibleWith: parsed.compatibleWith
+                compatibleWith: compatibleWith
             )
         }
 
