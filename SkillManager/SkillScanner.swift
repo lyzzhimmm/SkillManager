@@ -129,7 +129,8 @@ struct SkillScanner {
         let source = meta?.source ?? ""
         let isUniversal = meta?.isUniversal ?? false
         let migration = meta?.migration ?? .portable
-        let compatibleWith = meta?.compatibleWith ?? Set(Agent.allCases)
+        // Universal skills are compatible with all agents
+        let compatibleWith: Set<Agent> = isUniversal ? Set(Agent.allCases) : (meta?.compatibleWith ?? Set(Agent.allCases))
 
         let inventoryDesc = meta?.description.trimmingCharacters(in: .whitespaces) ?? ""
         let finalDesc = inventoryDesc.isEmpty ? parsedDesc : inventoryDesc
