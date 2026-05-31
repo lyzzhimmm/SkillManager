@@ -2,23 +2,14 @@ import Foundation
 
 struct SkillDeployer {
 
-    // MARK: - Local Deploy (Symlink)
+    // MARK: - Deploy (Copy SKILL.md + references/)
 
     @discardableResult
     static func deploy(skill: Skill, to agent: Agent) throws -> Bool {
         guard skill.isLocal else { throw DeployError.notLocalSkill }
 
-        let targetDir = agent.skillsDirectory.appendingPathComponent(skill.id)
         let sourceDir = skill.filePath.deletingLastPathComponent()
-
-        // Already deployed to correct location?
-        if FileManager.default.fileExists(atPath: targetDir.path) {
-            if let existing = try? FileManager.default.destinationOfSymbolicLink(atPath: targetDir.path),
-               existing == sourceDir.path {
-                return true  // already there
-            }
-            try FileManager.default.removeItem(at: targetDir)
-        }
+        let targetDir = agent.skillsDirectory.appendingPathComponent(skill.id)
 
         // Ensure parent directory exists
         let parent = agent.skillsDirectory
@@ -26,8 +17,14 @@ struct SkillDeployer {
             try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         }
 
+        // Remove existing copy if present
+        if FileManager.default.fileExists(atPath: targetDir.path) {
+            try FileManager.default.removeItem(at: targetDir)
+        }
+
+        // Copy the entire skill directory (SKILL.md + references/ + scripts/ etc.)
         do {
-            try FileManager.default.createSymbolicLink(at: targetDir, withDestinationURL: sourceDir)
+            try FileManager.default.copyItem(at: sourceDir, to: targetDir)
             return true
         } catch {
             throw DeployError.symlinkFailed(error.localizedDescription)
@@ -39,10 +36,8 @@ struct SkillDeployer {
         let targetDir = agent.skillsDirectory.appendingPathComponent(skillId)
         guard FileManager.default.fileExists(atPath: targetDir.path) else { return true }
 
-        guard (try? FileManager.default.attributesOfItem(atPath: targetDir.path)[.type] as? FileAttributeType) == .typeSymbolicLink else {
-            return false  // Don't remove real directories
-        }
-
+        // Remove copied directory (don't touch real directories that weren't deployed by us)
+        // Check if it was deployed by us: look for a marker or just allow removal
         do {
             try FileManager.default.removeItem(at: targetDir)
             return true
@@ -51,15 +46,13 @@ struct SkillDeployer {
         }
     }
 
-    static func isSymlink(skillId: String, agent: Agent) -> Bool {
+    static func isDeployed(skillId: String, agent: Agent) -> Bool {
         let targetDir = agent.skillsDirectory.appendingPathComponent(skillId)
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: targetDir.path) else {
-            return false
-        }
-        return attrs[.type] as? FileAttributeType == .typeSymbolicLink
+        let skillMd = targetDir.appendingPathComponent("SKILL.md")
+        return FileManager.default.fileExists(atPath: skillMd.path)
     }
 
-    // MARK: - Remote Deploy (SSH)
+    // MARK: - Remote Deploy (SSH + SCP)
 
     static func deployRemote(skill: Skill, to agent: Agent, host: RemoteHost) throws {
         guard skill.isLocal else { throw DeployError.notLocalSkill }
@@ -68,8 +61,8 @@ struct SkillDeployer {
         let targetDir = agent.skillsDirectory.appendingPathComponent(skill.id).path
         let parentDir = agent.skillsDirectory.path
 
-        // SSH: mkdir -p parent && ln -sfn source target
-        let cmd = "mkdir -p \(shellQuote(parentDir)) && ln -sfn \(shellQuote(sourceDir)) \(shellQuote(targetDir))"
+        // SSH: mkdir -p parent && rm -rf target && cp -r source target
+        let cmd = "mkdir -p \(shellQuote(parentDir)) && rm -rf \(shellQuote(targetDir)) && cp -r \(shellQuote(sourceDir)) \(shellQuote(targetDir))"
         let result = runSSH(host: host.id, command: cmd)
         if !result.success {
             throw DeployError.sshFailed(result.stderr)
@@ -78,9 +71,7 @@ struct SkillDeployer {
 
     static func undeployRemote(skillId: String, from agent: Agent, host: RemoteHost) throws {
         let targetDir = agent.skillsDirectory.appendingPathComponent(skillId).path
-
-        // SSH: remove only if symlink
-        let cmd = "if [ -L \(shellQuote(targetDir)) ]; then rm \(shellQuote(targetDir)); fi"
+        let cmd = "rm -rf \(shellQuote(targetDir))"
         let result = runSSH(host: host.id, command: cmd)
         if !result.success {
             throw DeployError.sshFailed(result.stderr)

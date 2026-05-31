@@ -159,10 +159,8 @@ struct ContentView: View {
             if let firstId = ids.first, let skill = store.skills.first(where: { $0.id == firstId }) {
                 ForEach(Agent.allCases) { agent in
                     if skill.deployedIn.contains(agent) {
-                        if skill.isLocal {
-                            Button("取消部署到 \(agent.displayName)") {
-                                store.toggleDeploy(skillId: skill.id, agent: agent)
-                            }
+                        Button("取消部署到 \(agent.displayName)") {
+                            store.toggleDeploy(skillId: skill.id, agent: agent)
                         }
                     } else {
                         Button("部署到 \(agent.displayName)") {
