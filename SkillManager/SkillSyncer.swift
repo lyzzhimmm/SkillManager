@@ -200,23 +200,27 @@ struct SkillSyncer {
 
         let outputPath = (inventoryDir as NSString).appendingPathComponent("Agent Skill 跨平台对比清单.md")
 
-        // Classify skills by migration status
+        // Classify skills by universal flag and exclusive status
         var universal: [Skill] = []
         var claudeOnly: [Skill] = []
         var codexOnly: [Skill] = []
         var hermesOnly: [Skill] = []
 
         for skill in skills {
-            switch skill.migration {
-            case .exclusive(let agent):
+            if skill.isUniversal {
+                universal.append(skill)
+            } else if case .exclusive(let agent) = skill.migration {
                 switch agent {
                 case .claude: claudeOnly.append(skill)
                 case .codex: codexOnly.append(skill)
                 case .hermes: hermesOnly.append(skill)
                 default: universal.append(skill)
                 }
-            case .portable, .needsAdaptation:
-                universal.append(skill)
+            } else {
+                // Not universal, not exclusive — classify by where it's installed
+                if skill.deployedIn.contains(.claude) { claudeOnly.append(skill) }
+                if skill.deployedIn.contains(.codex) { codexOnly.append(skill) }
+                if skill.deployedIn.contains(.hermes) { hermesOnly.append(skill) }
             }
         }
 
