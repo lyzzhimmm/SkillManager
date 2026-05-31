@@ -14,17 +14,13 @@ struct SkillScanner {
         // 3. Scan local directories
         var localSkills: [String: (dirs: [URL], agents: Set<Agent>)] = [:]
 
-        // Scan ~/.agents/skills/ (shared agent-agnostic skills)
+        // Scan ~/.agents/skills/ (shared — deployed to ALL agents)
         let sharedDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".agents/skills")
-        scanDirectory(sharedDir, into: &localSkills, agent: .claude)
-
-        // Scan ~/.claude/.agents/skills/ (Claude's .agents skills)
-        let claudeAgentsDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/.agents/skills")
-        scanDirectory(claudeAgentsDir, into: &localSkills, agent: .claude)
+        scanDirectory(sharedDir, into: &localSkills, agents: Set(Agent.allCases))
 
         // Scan each agent's main skills directory
         for agent in Agent.allCases {
-            scanDirectory(agent.skillsDirectory, into: &localSkills, agent: agent)
+            scanDirectory(agent.skillsDirectory, into: &localSkills, agents: [agent])
         }
 
         // 4. Merge: start with local skills
@@ -124,7 +120,7 @@ struct SkillScanner {
             }
         }
 
-        // Fallback description: first non-empty, non-heading, non-colon-prefixed line after frontmatter
+        // Fallback description
         if parsedDesc.isEmpty {
             let lines = content.components(separatedBy: "\n")
             var passedFirstSeparator = false
@@ -132,11 +128,8 @@ struct SkillScanner {
             for line in lines {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 if trimmed == "---" {
-                    if !passedFirstSeparator {
-                        passedFirstSeparator = true
-                    } else if !passedSecondSeparator {
-                        passedSecondSeparator = true
-                    }
+                    if !passedFirstSeparator { passedFirstSeparator = true }
+                    else if !passedSecondSeparator { passedSecondSeparator = true }
                     continue
                 }
                 if passedSecondSeparator && !trimmed.isEmpty && !trimmed.hasPrefix("#") {
@@ -150,7 +143,6 @@ struct SkillScanner {
             atPath: dirs[0].appendingPathComponent("references").path
         )
 
-        // Cross-platform metadata
         let meta = crossPlatform[parsedName] ?? crossPlatform[name]
 
         let category = Category.classify(name: parsedName, description: parsedDesc)
@@ -161,8 +153,6 @@ struct SkillScanner {
 
         let inventoryDesc = meta?.description.trimmingCharacters(in: .whitespaces) ?? ""
         let finalDesc = inventoryDesc.isEmpty ? parsedDesc : inventoryDesc
-
-        let originAgent = agents.first
 
         return Skill(
             id: name,
@@ -175,13 +165,17 @@ struct SkillScanner {
             source: source,
             isUniversal: isUniversal,
             migration: migration,
-            originAgent: originAgent,
+            originAgent: agents.first,
             deployedIn: agents,
             isLocal: true
         )
     }
 
-    private static func scanDirectory(_ dir: URL, into localSkills: inout [String: (dirs: [URL], agents: Set<Agent>)], agent: Agent) {
+    private static func scanDirectory(
+        _ dir: URL,
+        into localSkills: inout [String: (dirs: [URL], agents: Set<Agent>)],
+        agents: Set<Agent>
+    ) {
         guard let contents = try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
@@ -197,9 +191,9 @@ struct SkillScanner {
             let name = item.lastPathComponent
             if localSkills[name] != nil {
                 localSkills[name]!.dirs.append(item)
-                localSkills[name]!.agents.insert(agent)
+                localSkills[name]!.agents.formUnion(agents)
             } else {
-                localSkills[name] = ([item], [agent])
+                localSkills[name] = ([item], agents)
             }
         }
     }

@@ -6,9 +6,14 @@ struct SidebarView: View {
     let totalCount: Int
     @Binding var inventoryPath: String
     let onReload: () -> Void
-    @Environment(\.colorScheme) private var scheme
 
-    private var isDark: Bool { scheme == .dark }
+    // Sidebar is always dark-themed
+    private let bg = Color(hex: 0x1A1A1E)
+    private let textPrimary = Color(hex: 0xF5F5F7)
+    private let textSecondary = Color(hex: 0xA1A1A6)
+    private let textMuted = Color(hex: 0x6E6E73)
+    private let textDim = Color(hex: 0xB0B0B4)
+    private let dividerColor = Color(hex: 0x2E2E32)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -48,7 +53,7 @@ struct SidebarView: View {
                     .padding(.horizontal, 9)
                     .padding(.vertical, 3)
                     .background(isOn ? Color(hex: 0x5E5CE6).opacity(0.2) : Color.clear)
-                    .foregroundColor(isOn ? Color(hex: 0xA78BFA) : Color(hex: 0xB0B0B4))
+                    .foregroundColor(isOn ? Color(hex: 0xA78BFA) : textDim)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(isOn ? Color(hex: 0x5E5CE6) : Color.white.opacity(0.1), lineWidth: 1)
@@ -89,7 +94,7 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(URL(fileURLWithPath: inventoryPath).lastPathComponent)
                     .font(.system(size: 11))
-                    .foregroundColor(Color(hex: 0xB0B0B4))
+                    .foregroundColor(textDim)
                     .lineLimit(1)
                     .truncationMode(.middle)
 
@@ -114,23 +119,21 @@ struct SidebarView: View {
                     .background(Color.white.opacity(0.08))
                     .cornerRadius(4)
 
-                    Button("刷新") {
-                        onReload()
-                    }
-                    .font(.system(size: 10.5))
-                    .buttonStyle(.plain)
-                    .foregroundColor(Color(hex: 0xE0E0E0))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.white.opacity(0.08))
-                    .cornerRadius(4)
+                    Button("刷新") { onReload() }
+                        .font(.system(size: 10.5))
+                        .buttonStyle(.plain)
+                        .foregroundColor(Color(hex: 0xE0E0E0))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.white.opacity(0.08))
+                        .cornerRadius(4)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
         }
         .frame(width: 220)
-        .background(isDark ? Color(0x1C1C1E) : Color(0x1A1A1E))
+        .background(bg)
     }
 
     // MARK: - Components
@@ -138,7 +141,7 @@ struct SidebarView: View {
     private func sectionTitle(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 10.5, weight: .semibold))
-            .foregroundColor(isDark ? Color(0xA1A1A6) : Color(0x6E6E73))
+            .foregroundColor(textSecondary)
             .textCase(.uppercase)
             .tracking(0.5)
             .padding(.horizontal, 16)
@@ -149,11 +152,11 @@ struct SidebarView: View {
         HStack {
             Text(category.rawValue)
                 .font(.system(size: 12.5))
-                .foregroundColor(filter.selectedCategory == category ? .white : Color(hex: 0xB0B0B4))
+                .foregroundColor(filter.selectedCategory == category ? .white : textDim)
             Spacer()
             Text("\(count)")
                 .font(.system(size: 10.5))
-                .foregroundColor(filter.selectedCategory == category ? .white : (isDark ? Color(0xA1A1A6) : Color(0x6E6E73)))
+                .foregroundColor(filter.selectedCategory == category ? .white : textSecondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 1)
                 .background(filter.selectedCategory == category ? Color.white.opacity(0.2) : Color.white.opacity(0.08))
@@ -176,7 +179,7 @@ struct SidebarView: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 3)
             .background(isOn ? Color(hex: 0x007AFF).opacity(0.15) : Color.clear)
-            .foregroundColor(isOn ? Color(hex: 0x64D2FF) : Color(hex: 0xB0B0B4))
+            .foregroundColor(isOn ? Color(hex: 0x64D2FF) : textDim)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(isOn ? Color(hex: 0x007AFF) : Color.white.opacity(0.1), lineWidth: 1)
@@ -196,7 +199,7 @@ struct SidebarView: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 3)
             .background(isOn ? color.opacity(0.2) : Color.clear)
-            .foregroundColor(isOn ? color : Color(hex: 0xB0B0B4))
+            .foregroundColor(isOn ? color : textDim)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(isOn ? color : Color.white.opacity(0.1), lineWidth: 1)
@@ -210,7 +213,7 @@ struct SidebarView: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(Color(hex: 0x2E2E32))
+            .fill(dividerColor)
             .frame(height: 1)
             .padding(.horizontal, 16)
             .padding(.vertical, 6)

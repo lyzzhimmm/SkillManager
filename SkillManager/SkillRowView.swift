@@ -5,7 +5,6 @@ import SwiftUI
 struct AgentBadge: View {
     let agent: Agent
     let isDeployed: Bool
-    var isInteractive: Bool = true
     let onTap: () -> Void
 
     var body: some View {
@@ -21,8 +20,7 @@ struct AgentBadge: View {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(isDeployed ? .white : agent.color.opacity(0.6))
             )
-            .opacity(isInteractive ? 1.0 : 0.6)
-            .onTapGesture { if isInteractive { onTap() } }
+            .onTapGesture { onTap() }
             .help(agent.displayName)
     }
 }

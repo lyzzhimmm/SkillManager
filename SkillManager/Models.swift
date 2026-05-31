@@ -154,6 +154,35 @@ struct Skill: Identifiable, Hashable {
     var isLocal: Bool  // true = has local directory, false = inventory only
 }
 
+// MARK: - Remote Host
+
+struct RemoteHost: Identifiable, Hashable {
+    let id: String      // SSH host alias
+    let name: String
+    let hostname: String
+    var isConnected: Bool
+}
+
+// MARK: - Deploy Error
+
+enum DeployError: LocalizedError {
+    case alreadyDeployed
+    case symlinkFailed(String)
+    case undeployFailed(String)
+    case sshFailed(String)
+    case notLocalSkill
+
+    var errorDescription: String? {
+        switch self {
+        case .alreadyDeployed:          return "已部署"
+        case .symlinkFailed(let e):     return "部署失败: \(e)"
+        case .undeployFailed(let e):    return "取消部署失败: \(e)"
+        case .sshFailed(let e):         return "远程部署失败: \(e)"
+        case .notLocalSkill:            return "非本地 Skill，无法直接部署"
+        }
+    }
+}
+
 // MARK: - Filter State
 
 struct FilterState {
