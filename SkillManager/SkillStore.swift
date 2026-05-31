@@ -4,6 +4,8 @@ import SwiftUI
 class SkillStore: ObservableObject {
     @Published var skills: [Skill] = []
     @Published var lastError: String?
+    @Published var syncStatus: SkillSyncer.SyncStatus?
+    @Published var isSyncing = false
 
     var categoryCounts: [Category: Int] {
         var counts: [Category: Int] = [:]
@@ -17,9 +19,65 @@ class SkillStore: ObservableObject {
         skills.filter { $0.deployedIn.contains(agent) }.count
     }
 
+    // MARK: - Load
+
     func load(inventoryPath: String? = nil) {
         skills = SkillScanner.scanAll(inventoryPath: inventoryPath)
+        refreshSyncStatus()
     }
+
+    // MARK: - Sync
+
+    func refreshSyncStatus() {
+        syncStatus = SkillSyncer.status()
+    }
+
+    func syncPull() {
+        isSyncing = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                _ = try SkillSyncer.pull()
+                DispatchQueue.main.async {
+                    self.isSyncing = false
+                    self.refreshSyncStatus()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.lastError = error.localizedDescription
+                    self.isSyncing = false
+                }
+            }
+        }
+    }
+
+    func syncPush() {
+        isSyncing = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                _ = try SkillSyncer.push()
+                DispatchQueue.main.async {
+                    self.isSyncing = false
+                    self.refreshSyncStatus()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.lastError = error.localizedDescription
+                    self.isSyncing = false
+                }
+            }
+        }
+    }
+
+    func installFromVault(skillName: String, to agent: Agent) {
+        do {
+            try SkillSyncer.installFromVault(skillName: skillName, to: agent)
+            load()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    // MARK: - Deploy
 
     func toggleDeploy(skillId: String, agent: Agent) {
         guard let index = skills.firstIndex(where: { $0.id == skillId }) else { return }

@@ -6,6 +6,10 @@ struct SidebarView: View {
     let totalCount: Int
     @Binding var inventoryPath: String
     let onReload: () -> Void
+    var syncStatus: SkillSyncer.SyncStatus?
+    var isSyncing: Bool = false
+    var onSyncPull: (() -> Void)?
+    var onSyncPush: (() -> Void)?
 
     // Sidebar is always dark-themed
     private let bg = Color(hex: 0x1A1A1E)
@@ -86,6 +90,41 @@ struct SidebarView: View {
             .padding(.horizontal, 16)
 
             Spacer()
+
+            divider
+
+            // Sync section
+            sectionTitle("云同步")
+            VStack(alignment: .leading, spacing: 6) {
+                if let status = syncStatus {
+                    if !status.isCloned {
+                        Button("初始化仓库") { onSyncPull?() }
+                            .sidebarButton()
+                    } else {
+                        HStack(spacing: 6) {
+                            Circle().fill(Color(hex: 0x30D158)).frame(width: 6, height: 6)
+                            Text(status.lastCommit ?? "已同步")
+                                .font(.system(size: 10))
+                                .foregroundColor(textDim)
+                                .lineLimit(1)
+                        }
+                        Text("\(status.skillCount) 个通用 Skill")
+                            .font(.system(size: 10))
+                            .foregroundColor(textMuted)
+
+                        HStack(spacing: 6) {
+                            Button(isSyncing ? "同步中..." : "拉取") { onSyncPull?() }
+                                .sidebarButton()
+                                .disabled(isSyncing)
+                            Button("推送") { onSyncPush?() }
+                                .sidebarButton()
+                                .disabled(isSyncing)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
 
             divider
 
@@ -217,5 +256,20 @@ struct SidebarView: View {
             .frame(height: 1)
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
+    }
+}
+
+// MARK: - Sidebar Button Style
+
+extension View {
+    func sidebarButton() -> some View {
+        self
+            .font(.system(size: 10.5))
+            .buttonStyle(.plain)
+            .foregroundColor(Color(hex: 0xE0E0E0))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Color.white.opacity(0.08))
+            .cornerRadius(4)
     }
 }

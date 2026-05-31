@@ -21,7 +21,11 @@ struct ContentView: View {
                 skillCounts: store.categoryCounts,
                 totalCount: store.skills.count,
                 inventoryPath: $inventoryPath,
-                onReload: { store.load(inventoryPath: inventoryPath) }
+                onReload: { store.load(inventoryPath: inventoryPath) },
+                syncStatus: store.syncStatus,
+                isSyncing: store.isSyncing,
+                onSyncPull: { store.syncPull() },
+                onSyncPush: { store.syncPush() }
             )
 
             mainContent
