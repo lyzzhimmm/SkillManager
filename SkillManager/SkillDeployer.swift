@@ -37,7 +37,7 @@ struct SkillDeployer {
             try FileManager.default.copyItem(at: sourceDir, to: targetDir)
             return true
         } catch {
-            throw DeployError.symlinkFailed(error.localizedDescription)
+            throw DeployError.deployFailed(error.localizedDescription)
         }
     }
 
@@ -46,8 +46,7 @@ struct SkillDeployer {
         let targetDir = agent.skillsDirectory.appendingPathComponent(skillId)
         guard FileManager.default.fileExists(atPath: targetDir.path) else { return true }
 
-        // Remove copied directory (don't touch real directories that weren't deployed by us)
-        // Check if it was deployed by us: look for a marker or just allow removal
+        // Remove copied directory
         do {
             try FileManager.default.removeItem(at: targetDir)
             return true

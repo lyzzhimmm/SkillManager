@@ -188,7 +188,7 @@ struct RemoteHost: Identifiable, Hashable {
 
 enum DeployError: LocalizedError {
     case alreadyDeployed
-    case symlinkFailed(String)
+    case deployFailed(String)
     case undeployFailed(String)
     case sshFailed(String)
     case notLocalSkill
@@ -196,7 +196,7 @@ enum DeployError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .alreadyDeployed:          return "已部署"
-        case .symlinkFailed(let e):     return "部署失败: \(e)"
+        case .deployFailed(let e):      return "部署失败: \(e)"
         case .undeployFailed(let e):    return "取消部署失败: \(e)"
         case .sshFailed(let e):         return "远程部署失败: \(e)"
         case .notLocalSkill:            return "非本地 Skill，无法直接部署"
