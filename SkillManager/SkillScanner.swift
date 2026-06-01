@@ -159,6 +159,24 @@ struct SkillScanner {
         var result: [String: Set<Agent>] = [:]
         let home = FileManager.default.homeDirectoryForCurrentUser
 
+        // ~/.agents/skills/ → shared, installed in ALL agents
+        let sharedDir = home.appendingPathComponent(".agents/skills")
+        if let contents = try? FileManager.default.contentsOfDirectory(
+            at: sharedDir, includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            for item in contents {
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir),
+                      isDir.boolValue else { continue }
+                let skillMd = item.appendingPathComponent("SKILL.md")
+                guard FileManager.default.fileExists(atPath: skillMd.path) else { continue }
+                let name = item.lastPathComponent
+                result[name, default: Set<Agent>()].formUnion(Agent.allCases)
+            }
+        }
+
+        // Agent-specific directories
         let dirs: [(Agent, URL)] = [
             (.claude, home.appendingPathComponent(".claude/skills")),
             (.codex, home.appendingPathComponent(".codex/skills")),
