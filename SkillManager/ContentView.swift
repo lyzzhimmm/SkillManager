@@ -139,7 +139,7 @@ struct ContentView: View {
             }
             .width(min: 72, ideal: 72, max: 80)
 
-            TableColumn("频次") { skill in
+            TableColumn("频次", value: \.frequency) { skill in
                 FrequencyBadge(frequency: skill.frequency)
             }
             .width(min: 40, ideal: 40, max: 50)
