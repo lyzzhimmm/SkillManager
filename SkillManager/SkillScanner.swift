@@ -38,6 +38,43 @@ struct SkillScanner {
             result.append(skill)
         }
 
+        // 5. Add skills from ~/.agents/skills/ that aren't in the inventory
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let sharedDir = home.appendingPathComponent(".agents/skills")
+        if let contents = try? FileManager.default.contentsOfDirectory(
+            at: sharedDir, includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            for item in contents {
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir),
+                      isDir.boolValue else { continue }
+                let skillMd = item.appendingPathComponent("SKILL.md")
+                guard FileManager.default.fileExists(atPath: skillMd.path) else { continue }
+                let name = item.lastPathComponent
+                // Skip if already in result
+                guard !result.contains(where: { $0.name == name }) else { continue }
+
+                let skill = Skill(
+                    id: name,
+                    name: name,
+                    description: "从 ~/.agents/skills/ 加载",
+                    category: .other,
+                    filePath: skillMd,
+                    hasReferences: false,
+                    frequency: .low,
+                    source: "",
+                    isUniversal: true,
+                    migration: .portable,
+                    originAgent: nil,
+                    deployedIn: Set(Agent.allCases),
+                    isLocal: true,
+                    compatibleWith: Set(Agent.allCases)
+                )
+                result.append(skill)
+            }
+        }
+
         // Sort: frequency high→medium→low, then alphabetically
         return result.sorted { a, b in
             if a.frequency != b.frequency { return a.frequency < b.frequency }
